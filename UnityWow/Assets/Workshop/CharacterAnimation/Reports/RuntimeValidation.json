@@ -1,0 +1,10 @@
+{
+  "clips": 140,
+  "samples": 700,
+  "animated": 138,
+  "static_poses": [
+    "HandsClosed",
+    "Stop"
+  ],
+  "ui": "UnityEngine.UI.Text / InputField"
+}

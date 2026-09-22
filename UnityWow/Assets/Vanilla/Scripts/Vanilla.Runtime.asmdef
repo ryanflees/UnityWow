@@ -1,0 +1,9 @@
+{
+    "name": "Vanilla.Runtime",
+    "rootNamespace": "CR",
+    "references": [
+        "Unity.InputSystem",
+        "KinematicCharacterController"
+    ],
+    "autoReferenced": true
+}

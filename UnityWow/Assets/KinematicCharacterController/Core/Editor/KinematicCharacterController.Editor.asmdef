@@ -1,0 +1,7 @@
+{
+    "name": "KinematicCharacterController.Editor",
+    "references": ["KinematicCharacterController"],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true
+}
+

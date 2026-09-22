@@ -1,0 +1,7 @@
+{
+    "name": "Vanilla.Editor",
+    "rootNamespace": "CR",
+    "references": ["Vanilla.Runtime", "KinematicCharacterController"],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true
+}
