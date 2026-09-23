@@ -284,7 +284,7 @@ namespace CR
             var panel = CreateRect("AnimationBrowser", canvasObject.transform, 16, 16, 340, 768);
             panel.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(0.035f, 0.055f, 0.085f, 0.96f);
             CreateText(panel, "WOWGIRL  /  WORKSHOP", 16, 12, 310, 34, 23);
-            CreateText(panel, "HumanFemale  -  140 animations", 16, 45, 310, 25, 16);
+            CreateText(panel, $"WowGirl  -  {ClipCount} animations", 16, 45, 310, 25, 16);
             var searchRect = CreateRect("Search", panel, 16, 82, 308, 34);
             searchRect.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(0.13f, 0.18f, 0.23f);
             var input = searchRect.gameObject.AddComponent<UnityEngine.UI.InputField>();

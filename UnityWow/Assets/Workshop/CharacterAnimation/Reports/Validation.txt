@@ -1,1 +1,1 @@
-Validated 140 clips, 700 sampled poses, all animation transform paths and character materials.
+Validated 142 clips, 710 sampled poses, all animation transform paths and character materials.

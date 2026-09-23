@@ -12,7 +12,14 @@ namespace CR
     {
         private const string m_ArtPath = "Assets/Art/Characters/WowGirl";
         private const string m_TestPath = "Assets/Workshop/CharacterAnimation";
-        private const string m_ModelPath = m_ArtPath + "/HumanFemale/Model/WowGirl.fbx";
+        private const string m_ModelPath = m_ArtPath + "/Model/WowGirl.fbx";
+
+        private static string[] GetAnimationPaths()
+        {
+            return Directory.GetFiles(m_ArtPath + "/Animations", "*.fbx")
+                .Select(path => path.Replace('\\', '/'))
+                .OrderBy(path => path).ToArray();
+        }
 
         [MenuItem("CR/Workshop/Build Character Animation Scene")]
         public static void Build()
@@ -20,7 +27,7 @@ namespace CR
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             var modelImporter = (ModelImporter)AssetImporter.GetAtPath(m_ModelPath);
             if (modelImporter == null) throw new InvalidOperationException("Export and copy the HumanFemale FBX assets first.");
-            modelImporter.animationType = ModelImporterAnimationType.Generic;
+            modelImporter.animationType = ModelImporterAnimationType.Human;
             modelImporter.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             modelImporter.importAnimation = false;
             modelImporter.optimizeGameObjects = false;
@@ -31,20 +38,21 @@ namespace CR
                 modelImporter.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), material.name), material);
             modelImporter.SaveAndReimport();
             var avatar = AssetDatabase.LoadAllAssetsAtPath(m_ModelPath).OfType<Avatar>().Single();
-            var paths = Directory.GetFiles(m_ArtPath + "/HumanFemale/Animations", "*.fbx").Select(path => path.Replace('\\', '/')).OrderBy(path => path).ToArray();
-            if (paths.Length != 140) throw new InvalidOperationException($"Expected 140 animation FBX files, found {paths.Length}.");
+            var paths = GetAnimationPaths();
+            if (paths.Length != 142) throw new InvalidOperationException($"Expected 142 unique animation FBX files, found {paths.Length}.");
             foreach (string path in paths)
             {
                 var importer = (ModelImporter)AssetImporter.GetAtPath(path);
-                importer.animationType = ModelImporterAnimationType.Generic;
+                importer.animationType = ModelImporterAnimationType.Human;
                 importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
                 importer.sourceAvatar = avatar;
                 importer.importAnimation = true;
+                importer.motionNodeName = "<Root Transform>";
                 importer.optimizeGameObjects = false;
                 importer.preserveHierarchy = true;
                 importer.animationCompression = ModelImporterAnimationCompression.Off;
                 importer.materialImportMode = ModelImporterMaterialImportMode.None;
-                var clips = importer.defaultClipAnimations;
+                var clips = importer.clipAnimations.Length > 0 ? importer.clipAnimations : importer.defaultClipAnimations;
                 string clipName = Path.GetFileNameWithoutExtension(path).Replace("WowGirl@", "");
                 foreach (var clip in clips)
                 {
@@ -59,7 +67,7 @@ namespace CR
                 importer.SaveAndReimport();
             }
             var animations = paths.SelectMany(path => AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>().Where(clip => !clip.name.StartsWith("__preview__"))).OrderBy(clip => clip.name).ToArray();
-            if (animations.Length != 140) throw new InvalidOperationException($"Expected 140 imported clips, found {animations.Length}.");
+            if (animations.Length != 142) throw new InvalidOperationException($"Expected 142 imported clips, found {animations.Length}.");
             Directory.CreateDirectory(m_TestPath + "/Scenes");
             var previousScene = SceneManager.GetActiveScene();
             if (previousScene.isDirty)
@@ -143,7 +151,7 @@ namespace CR
             int checkedSamples = 0;
             try
             {
-                var paths = Directory.GetFiles(m_ArtPath + "/HumanFemale/Animations", "*.fbx");
+                var paths = GetAnimationPaths();
                 foreach (var path in paths)
                 {
                     var clip = AssetDatabase.LoadAllAssetsAtPath(path.Replace('\\', '/')).OfType<AnimationClip>().Single(item => !item.name.StartsWith("__preview__"));
@@ -161,7 +169,7 @@ namespace CR
                     }
                     checkedClips++;
                 }
-                if (checkedClips != 140) throw new InvalidOperationException("The complete source set was not imported.");
+                if (checkedClips != 142) throw new InvalidOperationException("The complete source set was not imported.");
                 foreach (var renderer in character.GetComponentsInChildren<Renderer>())
                     if (renderer.sharedMaterials.Any(material => material == null || material.shader == null || material.shader.name.Contains("InternalError"))) throw new InvalidOperationException("Missing character material or shader.");
                 string report = $"Validated {checkedClips} clips, {checkedSamples} sampled poses, all animation transform paths and character materials.";

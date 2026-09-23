@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e0b8e840c0ce084298c658f25fd8d34, type: 3}
+  m_Name: CastOmni
+  m_EditorClassIdentifier: Vanilla.Runtime::CR.SpellDefinition
+  m_Id: 99004
+  m_FamilyId: 99004
+  m_Rank: 1
+  m_DisplayName: Cast Omni
+  m_Description: Casts for 2.5 seconds, then plays the omnidirectional release animation.
+  m_Icon: {fileID: 0}
+  m_School: 64
+  m_Cast:
+    m_Type: 1
+    m_CastTime: 2.5
+    m_ChannelDuration: 0
+    m_ChannelInterval: 0
+    m_CanMoveWhileCasting: 0
+    m_RequireFacingTarget: 0
+    m_IsInterruptible: 1
+  m_Target:
+    m_Type: 4
+    m_AllowedRelations: 4
+    m_MinRange: 0
+    m_MaxRange: 30
+    m_Radius: 0
+    m_Angle: 0
+    m_MaxTargetCount: 1
+    m_RequireLineOfSight: 1
+    m_IncludeCaster: 0
+  m_CostList: []
+  m_Cooldown:
+    m_Cooldown: 0
+    m_GlobalCooldown: 1.5
+    m_SharedCooldownGroup: 0
+    m_MaxCharges: 1
+    m_ChargeRecoveryTime: 0
+  m_EffectList: []
+  m_Presentation:
+    m_AnimationType: 2
+    m_CastEffectPrefab: {fileID: 0}
+    m_ProjectilePrefab: {fileID: 0}
+    m_ImpactEffectPrefab: {fileID: 0}
+    m_CastAudio: {fileID: 0}
+    m_ImpactAudio: {fileID: 0}
+    m_ProjectileSpeed: 0
+  references:
+    version: 2
+    RefIds: []

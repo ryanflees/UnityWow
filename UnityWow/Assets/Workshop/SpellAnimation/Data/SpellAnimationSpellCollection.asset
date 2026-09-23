@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2918ce4442fcb3a4292856e600bc5321, type: 3}
+  m_Name: SpellAnimationSpellCollection
+  m_EditorClassIdentifier: Vanilla.Runtime::CR.SpellConfigCollection
+  m_Id: 
+  m_SpellList:
+  - {fileID: 11400000, guid: 84b2f61c51c90b844b89d5eb2a1f4afa, type: 2}
+  - {fileID: 11400000, guid: 3ef4f2ccf705f4f45bd1268eb4853115, type: 2}
+  - {fileID: 11400000, guid: 90709b519b6741849b8b614f5f142c7d, type: 2}
+  - {fileID: 11400000, guid: 18d659ec1098cb748ab25cb4ef73e82a, type: 2}
+  - {fileID: 11400000, guid: 6678e77af74a5b34fb7752c6b3bffdcc, type: 2}
+  - {fileID: 11400000, guid: 429c2f8122af3ea4b8fdc54dcf4dd493, type: 2}
