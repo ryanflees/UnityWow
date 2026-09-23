@@ -1,1 +1,1 @@
-Validated 142 clips, 710 sampled poses, all animation transform paths and character materials.
+Validated 142 asset clips, 140 unique workshop entries, 710 sampled poses, scene references, animation transform paths and character materials.

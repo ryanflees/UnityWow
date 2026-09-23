@@ -13,6 +13,7 @@ namespace CR
         private const string m_ArtPath = "Assets/Art/Characters/WowGirl";
         private const string m_TestPath = "Assets/Workshop/CharacterAnimation";
         private const string m_ModelPath = m_ArtPath + "/Model/WowGirl.fbx";
+        private const string m_ScenePath = m_TestPath + "/Scenes/CharacterAnimationWorkshop.unity";
 
         private static string[] GetAnimationPaths()
         {
@@ -21,53 +22,70 @@ namespace CR
                 .OrderBy(path => path).ToArray();
         }
 
+        private static AnimationClip[] GetBrowserClips()
+        {
+            var clips = GetAnimationPaths().SelectMany(path => AssetDatabase.LoadAllAssetsAtPath(path)
+                .OfType<AnimationClip>().Where(clip => !clip.name.StartsWith("__preview__"))).ToArray();
+            if (clips.Length == 0) throw new InvalidOperationException("No WowGirl animation clips were found.");
+            return clips.Where(clip => !IsCompatibilityAlias(clip, clips)).Distinct()
+                .OrderBy(clip => clip.name, StringComparer.Ordinal).ToArray();
+        }
+
+        private static bool IsCompatibilityAlias(AnimationClip clip, AnimationClip[] clips)
+        {
+            string originalName = clip.name switch { "TurnLeft" => "ShuffleLeft", "TurnRight" => "ShuffleRight", _ => null };
+            if (originalName == null) return false;
+            AnimationClip original = clips.FirstOrDefault(item => item.name == originalName);
+            return original != null && File.ReadAllBytes(AssetDatabase.GetAssetPath(clip))
+                .SequenceEqual(File.ReadAllBytes(AssetDatabase.GetAssetPath(original)));
+        }
+
+        [MenuItem("CR/Workshop/Refresh Character Animation Clips")]
+        public static void RefreshClips()
+        {
+            AnimationClip[] clips = GetBrowserClips();
+            WithWorkshop(workshop =>
+            {
+                Undo.RecordObject(workshop, "Refresh character animation clips");
+                var serialized = new SerializedObject(workshop);
+                var character = serialized.FindProperty("m_Character").objectReferenceValue as Animator;
+                var camera = serialized.FindProperty("m_Camera").objectReferenceValue as Camera;
+                workshop.Configure(character, clips, camera);
+                EditorUtility.SetDirty(workshop);
+                EditorSceneManager.MarkSceneDirty(workshop.gameObject.scene);
+                if (!EditorSceneManager.SaveScene(workshop.gameObject.scene))
+                    throw new IOException("Could not save the refreshed workshop scene.");
+            });
+            Debug.Log($"Character Animation Workshop refreshed: {clips.Length} clips.");
+        }
+
+        private static void WithWorkshop(Action<CharacterAnimationWorkshop> operation)
+        {
+            if (EditorApplication.isPlaying) throw new InvalidOperationException("Run workshop maintenance outside Play mode.");
+            Scene scene = SceneManager.GetSceneByPath(m_ScenePath);
+            bool opened = !scene.isLoaded;
+            if (opened) scene = EditorSceneManager.OpenScene(m_ScenePath, OpenSceneMode.Additive);
+            try
+            {
+                CharacterAnimationWorkshop workshop = scene.GetRootGameObjects()
+                    .SelectMany(root => root.GetComponentsInChildren<CharacterAnimationWorkshop>(true)).Single();
+                operation(workshop);
+            }
+            finally
+            {
+                if (opened) EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
         [MenuItem("CR/Workshop/Build Character Animation Scene")]
         public static void Build()
         {
+            if (EditorApplication.isPlaying) throw new InvalidOperationException("Build the workshop outside Play mode.");
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            var modelImporter = (ModelImporter)AssetImporter.GetAtPath(m_ModelPath);
-            if (modelImporter == null) throw new InvalidOperationException("Export and copy the HumanFemale FBX assets first.");
-            modelImporter.animationType = ModelImporterAnimationType.Human;
-            modelImporter.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
-            modelImporter.importAnimation = false;
-            modelImporter.optimizeGameObjects = false;
-            modelImporter.preserveHierarchy = true;
-            var materials = AssetDatabase.FindAssets("t:Material", new[] { m_ArtPath + "/Materials" })
-                .Select(AssetDatabase.GUIDToAssetPath).Select(AssetDatabase.LoadAssetAtPath<Material>).ToArray();
-            foreach (var material in materials)
-                modelImporter.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), material.name), material);
-            modelImporter.SaveAndReimport();
-            var avatar = AssetDatabase.LoadAllAssetsAtPath(m_ModelPath).OfType<Avatar>().Single();
-            var paths = GetAnimationPaths();
-            if (paths.Length != 142) throw new InvalidOperationException($"Expected 142 unique animation FBX files, found {paths.Length}.");
-            foreach (string path in paths)
-            {
-                var importer = (ModelImporter)AssetImporter.GetAtPath(path);
-                importer.animationType = ModelImporterAnimationType.Human;
-                importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
-                importer.sourceAvatar = avatar;
-                importer.importAnimation = true;
-                importer.motionNodeName = "<Root Transform>";
-                importer.optimizeGameObjects = false;
-                importer.preserveHierarchy = true;
-                importer.animationCompression = ModelImporterAnimationCompression.Off;
-                importer.materialImportMode = ModelImporterMaterialImportMode.None;
-                var clips = importer.clipAnimations.Length > 0 ? importer.clipAnimations : importer.defaultClipAnimations;
-                string clipName = Path.GetFileNameWithoutExtension(path).Replace("WowGirl@", "");
-                foreach (var clip in clips)
-                {
-                    clip.name = clipName;
-                    clip.loopTime = IsLoop(clipName);
-                    clip.loopPose = false;
-                    clip.keepOriginalOrientation = true;
-                    clip.keepOriginalPositionY = true;
-                    clip.keepOriginalPositionXZ = true;
-                }
-                importer.clipAnimations = clips;
-                importer.SaveAndReimport();
-            }
-            var animations = paths.SelectMany(path => AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>().Where(clip => !clip.name.StartsWith("__preview__"))).OrderBy(clip => clip.name).ToArray();
-            if (animations.Length != 142) throw new InvalidOperationException($"Expected 142 imported clips, found {animations.Length}.");
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(m_ModelPath).OfType<Avatar>().SingleOrDefault();
+            if (avatar == null || !avatar.isValid || !avatar.isHuman)
+                throw new InvalidOperationException("The shared WowGirl model requires a valid Humanoid Avatar.");
+            AnimationClip[] animations = GetBrowserClips();
             Directory.CreateDirectory(m_TestPath + "/Scenes");
             var previousScene = SceneManager.GetActiveScene();
             if (previousScene.isDirty)
@@ -128,29 +146,38 @@ namespace CR
             floor.GetComponent<Renderer>().sharedMaterial = floorMaterial;
             var workshop = new GameObject("CharacterAnimationWorkshop").AddComponent<CharacterAnimationWorkshop>();
             workshop.Configure(animator, animations, camera);
-            animations.Single(clip => clip.name == "Stand").SampleAnimation(character, 0);
-            EditorSceneManager.SaveScene(scene, m_TestPath + "/Scenes/CharacterAnimationWorkshop.unity");
+            (animations.FirstOrDefault(clip => clip.name == "Stand") ?? animations[0]).SampleAnimation(character, 0);
+            EditorSceneManager.SaveScene(scene, m_ScenePath);
             AssetDatabase.SaveAssets();
             Selection.activeGameObject = character;
             if (SceneView.lastActiveSceneView != null) SceneView.lastActiveSceneView.Frame(new Bounds(new Vector3(0, 0.9f, 0), new Vector3(2, 2.2f, 2)), false);
             Debug.Log($"Character Animation Workshop ready: {animations.Length} clips.");
         }
 
-        private static bool IsLoop(string clipName)
-        {
-            return clipName.StartsWith("Stand") && !clipName.Contains("Wound") || clipName.StartsWith("Ready") || clipName.StartsWith("Hold") || clipName.StartsWith("ChannelCast") || clipName.StartsWith("Swim") || clipName.EndsWith("Loop") || clipName is "Walk" or "Run" or "Walkbackwards" or "Sprint" or "Jump" or "Fall" or "Sleep" or "Stun" or "StealthWalk" or "StealthStand";
-        }
-
         [MenuItem("CR/Workshop/Validate Character Animations")]
         public static string Validate()
         {
+            AnimationClip[] browserClips = GetBrowserClips();
+            WithWorkshop(workshop =>
+            {
+                var serialized = new SerializedObject(workshop);
+                var entries = serialized.FindProperty("m_Clips");
+                var actual = Enumerable.Range(0, entries.arraySize)
+                    .Select(index => entries.GetArrayElementAtIndex(index).objectReferenceValue as AnimationClip).ToArray();
+                if (!actual.SequenceEqual(browserClips))
+                    throw new InvalidOperationException("The workshop clip list is stale. Run CR/Workshop/Refresh Character Animation Clips.");
+                var animator = serialized.FindProperty("m_Character").objectReferenceValue as Animator;
+                if (animator == null || !animator.isHuman || serialized.FindProperty("m_Camera").objectReferenceValue == null)
+                    throw new InvalidOperationException("The workshop requires its Humanoid character and preview camera.");
+            });
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(m_ModelPath);
-            var character = UnityEngine.Object.Instantiate(model);
-            character.hideFlags = HideFlags.HideAndDontSave;
+            if (model == null) throw new InvalidOperationException("The shared WowGirl model was not found.");
+            Scene previewScene = EditorSceneManager.NewPreviewScene();
             int checkedClips = 0;
             int checkedSamples = 0;
             try
             {
+                var character = (GameObject)PrefabUtility.InstantiatePrefab(model, previewScene);
                 var paths = GetAnimationPaths();
                 foreach (var path in paths)
                 {
@@ -169,10 +196,9 @@ namespace CR
                     }
                     checkedClips++;
                 }
-                if (checkedClips != 142) throw new InvalidOperationException("The complete source set was not imported.");
                 foreach (var renderer in character.GetComponentsInChildren<Renderer>())
                     if (renderer.sharedMaterials.Any(material => material == null || material.shader == null || material.shader.name.Contains("InternalError"))) throw new InvalidOperationException("Missing character material or shader.");
-                string report = $"Validated {checkedClips} clips, {checkedSamples} sampled poses, all animation transform paths and character materials.";
+                string report = $"Validated {checkedClips} asset clips, {browserClips.Length} unique workshop entries, {checkedSamples} sampled poses, scene references, animation transform paths and character materials.";
                 Directory.CreateDirectory(m_TestPath + "/Reports");
                 File.WriteAllText(m_TestPath + "/Reports/Validation.txt", report + "\n");
                 Debug.Log(report);
@@ -180,7 +206,7 @@ namespace CR
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(character);
+                EditorSceneManager.ClosePreviewScene(previewScene);
             }
         }
     }

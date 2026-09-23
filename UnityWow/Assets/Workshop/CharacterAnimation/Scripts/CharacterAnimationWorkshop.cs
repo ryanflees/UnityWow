@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.EventSystems;
@@ -14,11 +15,12 @@ namespace CR
         [SerializeField] private Animator m_Character;
         [SerializeField] private AnimationClip[] m_Clips;
         [SerializeField] private Camera m_Camera;
+        [SerializeField] private bool m_ApplyFootIK = true;
         private PlayableGraph m_Graph;
         private AnimationClipPlayable m_Playable;
         private readonly List<int> m_Filtered = new List<int>();
         private readonly List<UnityEngine.UI.Button> m_ClipButtons = new List<UnityEngine.UI.Button>();
-        private readonly string[] m_Categories = { "Core 14", "All", "Combat", "Spells", "Movement", "Emotes", "Other" };
+        private readonly string[] m_Categories = { "All", "Movement", "Spells", "Melee", "Ranged", "Death", "Swimming", "Emotes", "Other" };
         private readonly string[] m_CoreActions = { "Stand", "Stand_V01", "Stand_V02", "Walk", "Run", "Walkbackwards", "ShuffleLeft", "ShuffleRight", "JumpStart", "Jump", "JumpEnd", "JumpLandRun", "Fall", "Sprint" };
         private Font m_Font;
         private UnityEngine.UI.Text m_Title;
@@ -27,9 +29,10 @@ namespace CR
         private UnityEngine.UI.Text m_PlayLabel;
         private UnityEngine.UI.Text m_LoopLabel;
         private UnityEngine.UI.Text m_CategoryLabel;
+        private UnityEngine.UI.Text m_FootIKLabel;
         private UnityEngine.UI.Slider m_Timeline;
         private string m_Search = "";
-        private int m_Category = 1;
+        private int m_Category;
         private int m_Selected;
         private int m_Page;
         private float m_Time;
@@ -44,20 +47,22 @@ namespace CR
         private const int m_PageSize = 11;
 
         public int ClipCount => m_Clips == null ? 0 : m_Clips.Length;
-        public string CurrentClip => ClipCount == 0 ? "" : m_Clips[m_Selected].name;
+        public string CurrentClip => m_Selected >= 0 && m_Selected < ClipCount && m_Clips[m_Selected] != null ? m_Clips[m_Selected].name : "";
+        public bool ApplyFootIK => m_ApplyFootIK;
 
         public void Configure(Animator character, AnimationClip[] clips, Camera camera)
         {
             m_Character = character;
-            m_Clips = clips;
+            m_Clips = GetValidClips(clips);
             m_Camera = camera;
         }
 
         private void Start()
         {
-            if (m_Character == null || ClipCount == 0)
+            m_Clips = GetValidClips(m_Clips);
+            if (m_Character == null || m_Camera == null || ClipCount == 0)
             {
-                Debug.LogError("Character Animation Workshop requires a character and animation clips.", this);
+                Debug.LogError("Character Animation Workshop requires a character, camera and animation clips.", this);
                 enabled = false;
                 return;
             }
@@ -89,7 +94,7 @@ namespace CR
             }
             EvaluatePose();
             m_Timeline.SetValueWithoutNotify(duration > 0 ? m_Time / duration : 0);
-            m_Status.text = $"{m_Time:0.00} / {duration:0.00}s    |    {m_Speed:0.00}x    |    30 FPS";
+            m_Status.text = $"{m_Time:0.00} / {duration:0.00}s    |    {m_Speed:0.00}x    |    {m_Clips[m_Selected].frameRate:0.##} FPS";
             m_PlayLabel.text = m_Playing ? "Pause" : "Play";
         }
 
@@ -103,7 +108,7 @@ namespace CR
             m_Playing = true;
             m_Loop = m_Clips[index].isLooping;
             m_Playable = AnimationClipPlayable.Create(m_Graph, m_Clips[index]);
-            m_Playable.SetApplyFootIK(false);
+            m_Playable.SetApplyFootIK(m_ApplyFootIK && m_Character.isHuman && m_Clips[index].humanMotion);
             m_Playable.SetApplyPlayableIK(false);
             m_Playable.SetSpeed(0);
             var output = AnimationPlayableOutput.Create(m_Graph, "Character", m_Character);
@@ -123,6 +128,20 @@ namespace CR
             EvaluatePose();
         }
 
+        public void SetFootIKEnabled(bool enabled)
+        {
+            m_ApplyFootIK = enabled;
+            if (m_FootIKLabel != null) m_FootIKLabel.text = enabled ? "Foot IK: ON" : "Foot IK: OFF";
+            if (!m_Playable.IsValid()) return;
+            m_Playable.SetApplyFootIK(enabled && m_Character.isHuman && m_Clips[m_Selected].humanMotion);
+            EvaluatePose();
+        }
+
+        private static AnimationClip[] GetValidClips(AnimationClip[] clips)
+        {
+            return clips == null ? Array.Empty<AnimationClip>() : clips.Where(clip => clip != null).Distinct().ToArray();
+        }
+
         private void EvaluatePose()
         {
             m_Playable.SetTime(m_Time);
@@ -138,10 +157,17 @@ namespace CR
 
         private string GetCategory(string clipName)
         {
-            if (clipName.Contains("Spell") || clipName.Contains("Cast")) return "Spells";
-            if (clipName.StartsWith("Attack") || clipName.StartsWith("Ready") || clipName.StartsWith("Parry") || clipName.StartsWith("Special") || clipName.StartsWith("Shield") || clipName.StartsWith("Hold") || clipName.StartsWith("Load") || clipName.Contains("Wound") || clipName is "Kick" or "Dodge" or "CombatCritical" or "BattleRoar" or "Whirlwind") return "Combat";
             if (clipName.StartsWith("Emote")) return "Emotes";
-            if (clipName.StartsWith("Stand") || clipName.StartsWith("Walk") || clipName.StartsWith("Run") || clipName.StartsWith("Jump") || clipName.StartsWith("Swim") || clipName.StartsWith("Shuffle") || clipName.StartsWith("Stealth") || clipName is "Sprint" or "Fall" or "Stop") return "Movement";
+            if (clipName.Contains("Spell") || clipName.StartsWith("ChannelCast")) return "Spells";
+            if (clipName.Contains("Bow") || clipName.Contains("Rifle") || clipName.Contains("Thrown")) return "Ranged";
+            if (clipName is "Death" or "Drown" or "Drowned") return "Death";
+            if (clipName.StartsWith("Swim")) return "Swimming";
+            if (clipName.StartsWith("Attack") || clipName.StartsWith("Ready") || clipName.StartsWith("Parry") ||
+                clipName.StartsWith("Special") || clipName.StartsWith("Shield") || clipName.Contains("Wound") ||
+                clipName is "Kick" or "Dodge" or "CombatCritical" or "BattleRoar" or "Whirlwind" or "DragonStomp") return "Melee";
+            if (clipName.StartsWith("Stand") || clipName.StartsWith("Walk") || clipName.StartsWith("Run") ||
+                clipName.StartsWith("Jump") || clipName.StartsWith("Shuffle") || clipName.StartsWith("Turn") ||
+                clipName.StartsWith("Stealth") || clipName is "Sprint" or "Fall" or "Stop") return "Movement";
             return "Other";
         }
 
@@ -149,7 +175,12 @@ namespace CR
         {
             m_Filtered.Clear();
             for (int i = 0; i < ClipCount; i++)
-                if (m_Clips[i].name.IndexOf(m_Search, StringComparison.OrdinalIgnoreCase) >= 0 && (m_Category == 1 || m_Category == 0 && Array.IndexOf(m_CoreActions, m_Clips[i].name) >= 0 || GetCategory(m_Clips[i].name) == m_Categories[m_Category])) m_Filtered.Add(i);
+            {
+                string clipName = m_Clips[i].name;
+                bool matchesCategory = m_Category == 0 || GetCategory(clipName) == m_Categories[m_Category];
+                if (matchesCategory && clipName.IndexOf(m_Search, StringComparison.OrdinalIgnoreCase) >= 0)
+                    m_Filtered.Add(i);
+            }
             m_Filtered.Sort(CompareClips);
             m_Page = 0;
             RefreshPage();
@@ -157,6 +188,10 @@ namespace CR
 
         private int CompareClips(int left, int right)
         {
+            int leftCategory = Array.IndexOf(m_Categories, GetCategory(m_Clips[left].name));
+            int rightCategory = Array.IndexOf(m_Categories, GetCategory(m_Clips[right].name));
+            int categoryOrder = leftCategory.CompareTo(rightCategory);
+            if (categoryOrder != 0) return categoryOrder;
             int leftCore = Array.IndexOf(m_CoreActions, m_Clips[left].name);
             int rightCore = Array.IndexOf(m_CoreActions, m_Clips[right].name);
             int leftOrder = leftCore < 0 ? int.MaxValue : leftCore;
@@ -177,7 +212,10 @@ namespace CR
                 button.gameObject.SetActive(position < m_Filtered.Count);
                 if (position >= m_Filtered.Count) continue;
                 int clipIndex = m_Filtered[position];
-                button.GetComponentInChildren<UnityEngine.UI.Text>().text = m_Clips[clipIndex].name;
+                string clipName = m_Clips[clipIndex].name;
+                var label = button.GetComponentInChildren<UnityEngine.UI.Text>();
+                label.text = m_Category == 0 ? $"[{GetCategory(clipName)}] {clipName}" : clipName;
+                label.fontSize = m_Category == 0 ? 14 : 16;
                 button.image.color = clipIndex == m_Selected ? new Color(0.12f, 0.46f, 0.52f) : new Color(0.13f, 0.18f, 0.23f);
                 button.onClick.RemoveAllListeners();
                 button.onClick.AddListener(() => SelectClip(clipIndex));
@@ -302,7 +340,9 @@ namespace CR
             CreateButton(panel, "Previous", 16, 620, 148, () => { m_Page--; RefreshPage(); });
             CreateButton(panel, "Next", 176, 620, 148, () => { m_Page++; RefreshPage(); });
             m_PageLabel = CreateText(panel, "", 16, 660, 308, 28, 16);
-            CreateText(panel, "Select an action, then inspect its pose.\nStatic source poses remain short holds.", 16, 700, 308, 52, 14).horizontalOverflow = HorizontalWrapMode.Wrap;
+            m_FootIKLabel = CreateButton(panel, m_ApplyFootIK ? "Foot IK: ON" : "Foot IK: OFF", 16, 696, 308,
+                () => SetFootIKEnabled(!m_ApplyFootIK)).GetComponentInChildren<UnityEngine.UI.Text>();
+            CreateText(panel, "Toggle IK to compare support feet.", 16, 736, 308, 24, 14);
             var controls = CreateRect("Playback", canvasObject.transform, 380, 632, 870, 152);
             controls.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(0.035f, 0.055f, 0.085f, 0.96f);
             m_Title = CreateText(controls, "Stand", 16, 4, 400, 35, 24);

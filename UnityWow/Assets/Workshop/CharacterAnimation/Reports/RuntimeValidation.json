@@ -6,5 +6,19 @@
     "HandsClosed",
     "Stop"
   ],
+  "foot_ik_default": true,
+  "foot_ik_toggle": "passed",
+  "search_and_core_ordering": "passed",
+  "category_order_and_filters": "passed",
+  "categories": {
+    "Movement": 17,
+    "Spells": 10,
+    "Melee": 34,
+    "Ranged": 12,
+    "Death": 3,
+    "Swimming": 5,
+    "Emotes": 33,
+    "Other": 26
+  },
   "ui": "UnityEngine.UI.Text / InputField"
 }
