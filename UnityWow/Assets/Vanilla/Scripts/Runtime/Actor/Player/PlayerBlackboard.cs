@@ -20,6 +20,8 @@ namespace CR
 		public bool m_WasMoveLeftPressed;
 		public bool m_WasMoveRightPressed;
 		public bool m_WasJumpPressed;
+		public bool m_WasActionSlot1Pressed;
+		public bool m_WasActionSlot4Pressed;
 		public Vector3 m_GravityUp => Vector3.up;
 		public Quaternion m_GravityRotation => Quaternion.identity;
 		public Vector3 m_ReferenceFaceDirection = Vector3.forward;

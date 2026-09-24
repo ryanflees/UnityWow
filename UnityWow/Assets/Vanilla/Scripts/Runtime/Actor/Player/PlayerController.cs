@@ -13,6 +13,8 @@ namespace CR
 		public PlayerMotor m_PlayerMotor;
 		public Transform m_CharacterRoot;
 		public Character m_Character;
+		public SpellController m_SpellController;
+		public ActionBarModel m_ActionBar = new ActionBarModel();
 		public float m_CharacterFaceSharpness = 12f;
 		[Min(0f), Tooltip("How fast the character turns back to its forward direction after stopping. Use a smaller value for a slower turn.")]
 		public float m_ReturnToReferenceFaceSharpness = 8f;
@@ -59,6 +61,7 @@ namespace CR
 		private void OnDisable()
 		{
 			m_InputProcessor?.ReleaseCursor(Application.isFocused);
+			if (m_SpellController != null) m_SpellController.CancelPresentation();
 		}
 
 		private void OnApplicationFocus(bool hasFocus)
@@ -193,7 +196,17 @@ namespace CR
 			AddProcessor(new PlayerFacingProcessor(this));
 			AddProcessor(new PlayerMovementProcessor(this));
 			AddProcessor(new PlayerCharacterProcessor(this));
+			AddProcessor(new PlayerSpellProcessor(this));
 			AddProcessor(new PlayerCameraProcessor(this));
+		}
+
+		public SpellCastResult TryActivateActionSlot(int slotIndex)
+		{
+			EnsureRuntimeInitialized();
+			if (!isActiveAndEnabled || !m_Blackboard.m_InputEnabled) return SpellCastResult.Disabled;
+			if (m_SpellController == null || m_ActionBar == null) return SpellCastResult.PresentationUnavailable;
+			return m_SpellController.TryCast(new SpellCastRequest(m_ActionBar.GetSpellId(slotIndex),
+				Quaternion.LookRotation(m_Blackboard.m_ReferenceFaceDirection, m_Blackboard.m_GravityUp)));
 		}
 
 		private void EnsureRuntimeInitialized()

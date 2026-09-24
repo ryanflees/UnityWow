@@ -8,15 +8,42 @@ namespace CR
 {
 	public partial class CharacterLookAtIk
 	{
-		[Header("Upper Body Pose")]
 		public bool m_EnableUpperBodyStabilization = true;
-		[Range(0f, 1f)] public float m_UpperBodyWeight = 1f;
-		[Min(0f)] public float m_UpperBodyBlendInDuration = 0.12f;
-		[Min(0f)] public float m_UpperBodyBlendOutDuration = 0.15f;
+		[Range(0f, 1f), Tooltip("Overall stabilization strength, including torso, head and arms. Lower values retain more of the moving animation.")]
+		public float m_UpperBodyWeight = 1f;
+		[Min(0f), Tooltip("Seconds to move through the full 0-to-1 weight range when entering stabilization.")]
+		public float m_UpperBodyBlendInDuration = 0.12f;
+		[Min(0f), Tooltip("Seconds to move through the full 1-to-0 weight range when leaving stabilization.")]
+		public float m_UpperBodyBlendOutDuration = 0.15f;
+		[Tooltip("Torso reference bone. Changes take effect on the next spell; missing UpperChest falls back to Chest.")]
 		public HumanBodyBones m_UpperBodyAnchorBone = HumanBodyBones.UpperChest;
-		[Range(0f, 90f)] public float m_MaxUpperBodyJointTwist = 45f;
-		[Min(1f)] public float m_MaxUpperBodyJointRotationSpeed = 360f;
+		[Range(0f, 1f), Tooltip("1 keeps the spell-facing frame. 0 lets the reference pose turn with the character model, reducing counter-twist during strafing.")]
+		public float m_UpperBodyFacingLockWeight = 1f;
+		[Range(0f, 2f), Tooltip("Relative share of torso correction assigned to Spine. Zero leaves this joint's local animation unchanged.")]
+		public float m_SpineCorrectionWeight = 1f;
+		[Range(0f, 2f), Tooltip("Relative share of torso correction assigned to Chest.")]
+		public float m_ChestCorrectionWeight = 1f;
+		[Range(0f, 2f), Tooltip("Relative share of torso correction assigned to UpperChest, when present.")]
+		public float m_UpperChestCorrectionWeight = 1f;
+		[Range(0f, 90f), Tooltip("Per-joint axial twist limit relative to the Avatar rest pose, before blending. This is not a total torso angle limit.")]
+		public float m_MaxUpperBodyJointTwist = 45f;
+		[Min(1f), Tooltip("Solved torso joint speed in degrees per second. Lower values soften turns but add lag.")]
+		public float m_MaxUpperBodyJointRotationSpeed = 360f;
 		public bool m_PreserveUpperBodyHeadAndArmOrientation = true;
+		[Range(0f, 1f), Tooltip("Additional head orientation correction after the torso solve. Zero lets the head follow the animated torso.")]
+		public float m_HeadOrientationWeight = 1f;
+		[Range(0f, 1f), Tooltip("Left upper-arm reference orientation strength. Zero keeps its local animation after the torso solve.")]
+		public float m_LeftArmOrientationWeight = 1f;
+		[Range(0f, 1f), Tooltip("Right upper-arm reference orientation strength. Lower this if the casting shoulder compensates too strongly.")]
+		public float m_RightArmOrientationWeight = 1f;
+		[Range(0f, 180f), Tooltip("Maximum extra upper-arm rotation after the torso solve. Lower this to reduce shoulder compensation. This is not an anatomical joint limit.")]
+		public float m_MaxArmCorrectionAngle = 180f;
+		[Range(0f, 180f), Tooltip("Maximum extra head rotation after the torso solve.")]
+		public float m_MaxHeadCorrectionAngle = 180f;
+		[Range(0f, 1f), Tooltip("Share of the head correction carried by Neck; the rest is carried by Head.")]
+		public float m_NeckCorrectionShare = 0.5f;
+		[Range(0f, 1f), Tooltip("1 fades LookAt out as spell stabilization takes over. Lower values retain more LookAt and may add torso twist.")]
+		public float m_UpperBodyLookAtSuppression = 1f;
 
 		private Transform m_Anchor;
 		private GameObject m_ReferenceRoot;
@@ -27,6 +54,7 @@ namespace CR
 		private AnimationClipPlayable m_ClipPlayable;
 		private AnimationClip m_Clip;
 		private Quaternion m_ReferenceRotation = Quaternion.identity;
+		private Quaternion m_PoseReferenceRotation = Quaternion.identity;
 		private int m_StateHash;
 		private int m_SourceLayer;
 		private bool m_HasRequest;
@@ -45,6 +73,7 @@ namespace CR
 
 		private sealed class SpineJoint
 		{
+			public HumanBodyBones m_Bone;
 			public Transform m_Transform;
 			public Quaternion m_RestRotation;
 			public Vector3 m_TwistAxis;
@@ -113,8 +142,10 @@ namespace CR
 
 			m_ClipPlayable.SetTime(m_SampleTime);
 			m_Graph.Evaluate(0f);
+			m_PoseReferenceRotation = m_UpperBodyFacingLockWeight >= 1f ? m_ReferenceRotation :
+				Quaternion.Slerp(m_Animator.transform.rotation, m_ReferenceRotation, Mathf.Clamp01(m_UpperBodyFacingLockWeight));
 			Quaternion modelRotation = Quaternion.Inverse(m_ReferenceRoot.transform.rotation) * m_ReferenceAnchor.rotation;
-			UpperBodyTargetRotation = m_ReferenceRotation * modelRotation;
+			UpperBodyTargetRotation = m_PoseReferenceRotation * modelRotation;
 			ApplySpinePose(deltaTime);
 			if (m_PreserveUpperBodyHeadAndArmOrientation) PreserveActionOrientation();
 			UpperBodyRotationError = Quaternion.Angle(m_Anchor.rotation, UpperBodyTargetRotation);
@@ -124,25 +155,30 @@ namespace CR
 		{
 			// Blend absolute clip poses after the constrained torso solve. A residual from the already
 			// blended chest applies the outgoing animation twice and can wind the head around during fade-out.
-			BlendReferenceOrientation(m_LeftUpperArm, m_ReferenceLeftUpperArm);
-			BlendReferenceOrientation(m_RightUpperArm, m_ReferenceRightUpperArm);
+			BlendReferenceOrientation(m_LeftUpperArm, m_ReferenceLeftUpperArm, m_LeftArmOrientationWeight);
+			BlendReferenceOrientation(m_RightUpperArm, m_ReferenceRightUpperArm, m_RightArmOrientationWeight);
 			if (m_UpperBodyHead == null || m_ReferenceHead == null) return;
-			Quaternion headRotation = Quaternion.Slerp(m_UpperBodyHead.rotation, GetReferenceWorldRotation(m_ReferenceHead), m_UpperBodyPoseWeight);
+			Quaternion headTarget = Quaternion.RotateTowards(m_UpperBodyHead.rotation, GetReferenceWorldRotation(m_ReferenceHead),
+				Mathf.Clamp(m_MaxHeadCorrectionAngle, 0f, 180f));
+			Quaternion headRotation = Quaternion.Slerp(m_UpperBodyHead.rotation, headTarget,
+				m_UpperBodyPoseWeight * Mathf.Clamp01(m_HeadOrientationWeight));
 			Quaternion correction = headRotation * Quaternion.Inverse(m_UpperBodyHead.rotation);
 			if (m_Neck != null)
-				m_Neck.rotation = Quaternion.Slerp(Quaternion.identity, correction, 0.5f) * m_Neck.rotation;
+				m_Neck.rotation = Quaternion.Slerp(Quaternion.identity, correction, Mathf.Clamp01(m_NeckCorrectionShare)) * m_Neck.rotation;
 			m_UpperBodyHead.rotation = headRotation;
 		}
 
-		private void BlendReferenceOrientation(Transform bone, Transform reference)
+		private void BlendReferenceOrientation(Transform bone, Transform reference, float weight)
 		{
-			if (bone != null && reference != null)
-				bone.rotation = Quaternion.Slerp(bone.rotation, GetReferenceWorldRotation(reference), m_UpperBodyPoseWeight);
+			if (bone == null || reference == null) return;
+			Quaternion target = Quaternion.RotateTowards(bone.rotation, GetReferenceWorldRotation(reference),
+				Mathf.Clamp(m_MaxArmCorrectionAngle, 0f, 180f));
+			bone.rotation = Quaternion.Slerp(bone.rotation, target, m_UpperBodyPoseWeight * Mathf.Clamp01(weight));
 		}
 
 		private Quaternion GetReferenceWorldRotation(Transform reference)
 		{
-			return m_ReferenceRotation * Quaternion.Inverse(m_ReferenceRoot.transform.rotation) * reference.rotation;
+			return m_PoseReferenceRotation * Quaternion.Inverse(m_ReferenceRoot.transform.rotation) * reference.rotation;
 		}
 
 		private void ApplySpinePose(float deltaTime)
@@ -153,17 +189,30 @@ namespace CR
 			correction = MatchHemisphere(correction, branchReference);
 			m_PreviousCorrection = correction;
 			correction.ToAngleAxis(out float correctionAngle, out Vector3 correctionAxis);
-			foreach (SpineJoint joint in m_SpineJoints) joint.m_AnimatedRotation = joint.m_Transform.localRotation;
+			float totalWeight = 0f;
+			foreach (SpineJoint joint in m_SpineJoints)
+			{
+				joint.m_AnimatedRotation = joint.m_Transform.localRotation;
+				totalWeight += GetSpineCorrectionWeight(joint.m_Bone);
+			}
+			float remainingWeight = totalWeight;
 			for (int i = 0; i < m_SpineJoints.Length; i++)
 			{
 				SpineJoint joint = m_SpineJoints[i];
+				float jointWeight = GetSpineCorrectionWeight(joint.m_Bone);
+				if (jointWeight <= 0f || remainingWeight <= 0f)
+				{
+					joint.m_PreviousRotation = joint.m_AnimatedRotation;
+					continue;
+				}
 				Quaternion remaining = UpperBodyTargetRotation * Quaternion.Inverse(m_Anchor.rotation);
 				Quaternion expectedRemainder = Quaternion.AngleAxis(correctionAngle *
-					(m_SpineJoints.Length - i) / m_SpineJoints.Length, correctionAxis);
+					remainingWeight / totalWeight, correctionAxis);
 				remaining = MatchHemisphere(remaining, expectedRemainder);
 				remaining.ToAngleAxis(out float angle, out Vector3 axis);
-				joint.m_Transform.rotation = Quaternion.AngleAxis(angle / (m_SpineJoints.Length - i), axis) *
+				joint.m_Transform.rotation = Quaternion.AngleAxis(angle * jointWeight / remainingWeight, axis) *
 					joint.m_Transform.rotation;
+				remainingWeight -= jointWeight;
 				Quaternion constrained = LimitTwist(joint, joint.m_Transform.localRotation);
 				// A shortest-arc solution can switch sides near 180 degrees. Bound that change in local space.
 				if (m_HasPreviousPose)
@@ -176,6 +225,13 @@ namespace CR
 			foreach (SpineJoint joint in m_SpineJoints)
 				joint.m_Transform.localRotation = Quaternion.Slerp(joint.m_AnimatedRotation,
 					joint.m_PreviousRotation, m_UpperBodyPoseWeight);
+		}
+
+		private float GetSpineCorrectionWeight(HumanBodyBones bone)
+		{
+			float weight = bone == HumanBodyBones.Spine ? m_SpineCorrectionWeight :
+				bone == HumanBodyBones.Chest ? m_ChestCorrectionWeight : m_UpperChestCorrectionWeight;
+			return Mathf.Clamp(weight, 0f, 2f);
 		}
 
 		private static Quaternion MatchHemisphere(Quaternion rotation, Quaternion reference)
@@ -268,7 +324,7 @@ namespace CR
 					bone == HumanBodyBones.Chest ? HumanBodyBones.UpperChest : HumanBodyBones.Neck);
 				if (child == null) child = m_Animator.GetBoneTransform(HumanBodyBones.Neck);
 				Vector3 axis = child != null ? target.InverseTransformPoint(child.position).normalized : Vector3.up;
-				joints.Add(new SpineJoint { m_Transform = target, m_RestRotation = restRotation, m_TwistAxis = axis });
+				joints.Add(new SpineJoint { m_Bone = bone, m_Transform = target, m_RestRotation = restRotation, m_TwistAxis = axis });
 			}
 			m_SpineJoints = joints.ToArray();
 			m_Neck = m_Animator.GetBoneTransform(HumanBodyBones.Neck);

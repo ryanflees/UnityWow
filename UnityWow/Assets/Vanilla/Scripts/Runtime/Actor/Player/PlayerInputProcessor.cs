@@ -49,6 +49,9 @@ namespace CR
 				ReleaseCursor(false);
 			if (!inputState.m_PrimaryMouse.m_IsPressed && !inputState.m_SecondaryMouse.m_IsPressed)
 				m_WaitForMouseRelease = false;
+			if ((inputState.m_PrimaryMouse.m_WasPressed || inputState.m_SecondaryMouse.m_WasPressed) &&
+				UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+				m_WaitForMouseRelease = true;
 
 			blackboard.m_IsPrimaryMouseRotating = !m_WaitForMouseRelease && inputState.m_PrimaryMouse.m_IsPressed;
 			blackboard.m_IsSecondaryMouseRotating = !m_WaitForMouseRelease && inputState.m_SecondaryMouse.m_IsPressed;
@@ -59,6 +62,8 @@ namespace CR
 			blackboard.m_WasMoveLeftPressed = inputState.m_MoveLeft.m_WasPressed;
 			blackboard.m_WasMoveRightPressed = inputState.m_MoveRight.m_WasPressed;
 			blackboard.m_WasJumpPressed = inputState.m_Jump.m_WasPressed;
+			blackboard.m_WasActionSlot1Pressed = inputState.m_ActionSlot1.m_WasPressed;
+			blackboard.m_WasActionSlot4Pressed = inputState.m_ActionSlot4.m_WasPressed;
 			blackboard.m_IsCameraRotating = blackboard.m_IsPrimaryMouseRotating || blackboard.m_IsSecondaryMouseRotating;
 			blackboard.m_MoveInput = GetMoveInput(inputState, blackboard.m_IsPrimaryMouseRotating && blackboard.m_IsSecondaryMouseRotating);
 			blackboard.m_ZoomInput = inputState.m_Zoom;
@@ -106,6 +111,8 @@ namespace CR
 			blackboard.m_WasMoveLeftPressed = false;
 			blackboard.m_WasMoveRightPressed = false;
 			blackboard.m_WasJumpPressed = false;
+			blackboard.m_WasActionSlot1Pressed = false;
+			blackboard.m_WasActionSlot4Pressed = false;
 			blackboard.m_WasStandingJumpRequested = false;
 			blackboard.m_IsFaceControlledByCamera = false;
 			blackboard.m_ShouldSnapFaceAngle = false;

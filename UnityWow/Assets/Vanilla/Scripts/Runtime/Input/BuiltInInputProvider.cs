@@ -28,7 +28,9 @@ namespace CR
                 m_MoveBackward = backward,
                 m_MoveLeft = left,
                 m_MoveRight = right,
-                m_Jump = Button(keyboard?.spaceKey)
+                m_Jump = Button(keyboard?.spaceKey),
+                m_ActionSlot1 = Button(keyboard?.digit1Key),
+                m_ActionSlot4 = Button(keyboard?.digit4Key)
             };
 #elif ENABLE_LEGACY_INPUT_MANAGER
             return new RuntimeInputState
@@ -43,7 +45,9 @@ namespace CR
                 m_MoveBackward = Button(KeyCode.S),
                 m_MoveLeft = Button(KeyCode.A),
                 m_MoveRight = Button(KeyCode.D),
-                m_Jump = Button(KeyCode.Space)
+                m_Jump = Button(KeyCode.Space),
+                m_ActionSlot1 = Button(KeyCode.Alpha1),
+                m_ActionSlot4 = Button(KeyCode.Alpha4)
             };
 #else
             return RuntimeInputState.Empty;

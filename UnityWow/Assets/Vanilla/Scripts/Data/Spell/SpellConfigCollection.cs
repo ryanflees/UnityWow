@@ -42,9 +42,11 @@ namespace CR
 			}
 		}
 
-		private void RebuildLookup()
+		public void RebuildLookup()
 		{
 			m_SpellById = new Dictionary<int, SpellDefinition>();
+			if (m_SpellList == null) return;
+			HashSet<int> duplicateIds = new HashSet<int>();
 			for (int i = 0; i < m_SpellList.Count; i++)
 			{
 				SpellDefinition spell = m_SpellList[i];
@@ -53,9 +55,12 @@ namespace CR
 					continue;
 				}
 
+				if (duplicateIds.Contains(spell.m_Id)) continue;
 				if (!m_SpellById.TryAdd(spell.m_Id, spell))
 				{
-					Debug.LogWarning($"Duplicate spell id {spell.m_Id} in {name}", this);
+					m_SpellById.Remove(spell.m_Id);
+					duplicateIds.Add(spell.m_Id);
+					Debug.LogWarning($"Duplicate spell id {spell.m_Id} in {name}; this id cannot be resolved.", this);
 				}
 			}
 		}

@@ -3,7 +3,8 @@
     "rootNamespace": "CR",
     "references": [
         "Unity.InputSystem",
-        "KinematicCharacterController"
+        "KinematicCharacterController",
+        "UnityEngine.UI"
     ],
     "autoReferenced": true
 }

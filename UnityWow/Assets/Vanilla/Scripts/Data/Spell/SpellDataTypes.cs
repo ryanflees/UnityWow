@@ -43,7 +43,12 @@ namespace CR
 	public class SpellCooldownData
 	{
 		[Min(0f)] public float m_Cooldown;
-		[Min(0f)] public float m_GlobalCooldown;
+		[Tooltip("Starts the actor's global cooldown when the cast succeeds.")]
+		public bool m_TriggersGlobalCooldown = true;
+		[Tooltip("Blocks this spell during an existing global cooldown. Disable both switches for an off-GCD skill.")]
+		public bool m_IsAffectedByGlobalCooldown = true;
+		[Min(0f), Tooltip("Base duration in seconds before actor haste is applied.")]
+		public float m_GlobalCooldown = 1.5f;
 		public int m_SharedCooldownGroup;
 		[Min(1)] public int m_MaxCharges = 1;
 		[Min(0f)] public float m_ChargeRecoveryTime;

@@ -2,6 +2,8 @@
 
 Open `Scenes/SpellAnimationWorkshop.unity` and enter Play mode. Keys 1-6 play the six test spells; 0 or Escape cancels. The layer toggle compares SpellLayer alone with SpellLayer plus the synchronized upper-body overlay while standing. Toggling does not restart the spell.
 
+See [the development baseline](DEVELOPMENT.md) for the reviewed architecture, implemented boundaries, icon authoring, and the next combat slice. This workshop previews animation; its six definitions have no gameplay effects. It uses the shared `SpellPresentation` adapter for animation and release pose stabilization. Release completion follows Animator playback rather than a fixed duration.
+
 ## Moving instant spells
 
 - Hold WASD for eight directions relative to the character's initial forward direction. Release the keys to stand. The camera observes the character from the front, so character-right appears on screen-left.

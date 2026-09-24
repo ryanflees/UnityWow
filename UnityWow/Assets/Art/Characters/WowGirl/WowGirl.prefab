@@ -1481,6 +1481,8 @@ SkinnedMeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -1506,9 +1508,11 @@ SkinnedMeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
@@ -2545,6 +2549,8 @@ SkinnedMeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -2566,9 +2572,11 @@ SkinnedMeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
@@ -4030,6 +4038,8 @@ SkinnedMeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -4058,9 +4068,11 @@ SkinnedMeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
@@ -4748,6 +4760,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6760916286821711382}
   - component: {fileID: 257913786545517364}
+  - component: {fileID: 8859505969126274523}
   m_Layer: 0
   m_Name: WowGirl
   m_TagString: Untagged
@@ -4796,3 +4809,48 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &8859505969126274523
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9072452213679331908}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 03fa07afc126a0244824ccf664afb4e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Vanilla.Runtime::CR.CharacterLookAtIk
+  m_EnableUpperBodyStabilization: 1
+  m_UpperBodyWeight: 1
+  m_UpperBodyBlendInDuration: 0.12
+  m_UpperBodyBlendOutDuration: 0.15
+  m_UpperBodyAnchorBone: 54
+  m_UpperBodyFacingLockWeight: 1
+  m_SpineCorrectionWeight: 1
+  m_ChestCorrectionWeight: 1
+  m_UpperChestCorrectionWeight: 1
+  m_MaxUpperBodyJointTwist: 45
+  m_MaxUpperBodyJointRotationSpeed: 360
+  m_PreserveUpperBodyHeadAndArmOrientation: 1
+  m_HeadOrientationWeight: 1
+  m_LeftArmOrientationWeight: 1
+  m_RightArmOrientationWeight: 1
+  m_MaxArmCorrectionAngle: 180
+  m_MaxHeadCorrectionAngle: 180
+  m_NeckCorrectionShare: 0.5
+  m_UpperBodyLookAtSuppression: 1
+  m_Enable: 1
+  m_Animator: {fileID: 257913786545517364}
+  m_BaseTransform: {fileID: 0}
+  m_Head: {fileID: 3799355790344207433}
+  m_Target: {fileID: 0}
+  m_BodyBone: {fileID: 3680465700097173924}
+  m_EnableBody: 1
+  m_BodyWeight: 0.771
+  m_Weight: 0.829
+  m_HeadWeight: 0.663
+  m_MaxAngle: 85
+  m_TargetDistance: 8
+  m_TargetHeight: 1.45
+  m_UseTargetTransform: 0

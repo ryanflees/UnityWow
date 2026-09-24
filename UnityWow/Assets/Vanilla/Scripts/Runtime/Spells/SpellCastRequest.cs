@@ -1,11 +1,29 @@
+// Copyright (c) 2026 CatRabbit. All rights reserved.
+
+using UnityEngine;
+
 namespace CR
 {
-    /// <summary>
-    /// Placeholder: A request to cast a spell with a specified target.
-    /// </summary>
-    public class SpellCastRequest
-    {
-    }
+	public readonly struct SpellCastRequest
+	{
+		public readonly int m_SpellId;
+		public readonly Quaternion m_FacingRotation;
+
+		public SpellCastRequest(int spellId, Quaternion facingRotation)
+		{
+			m_SpellId = spellId;
+			m_FacingRotation = facingRotation;
+		}
+	}
+
+	public enum SpellCastResult
+	{
+		Success,
+		Disabled,
+		UnknownSpell,
+		InvalidDefinition,
+		UnsupportedSpell,
+		PresentationUnavailable,
+		GlobalCooldown
+	}
 }
-
-

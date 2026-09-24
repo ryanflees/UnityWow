@@ -16,6 +16,8 @@ namespace CR
 		public RuntimeInputButton m_MoveLeft;
 		public RuntimeInputButton m_MoveRight;
 		public RuntimeInputButton m_Jump;
+		public RuntimeInputButton m_ActionSlot1;
+		public RuntimeInputButton m_ActionSlot4;
 		public RuntimeInputButton m_AutoRun;
 		public RuntimeInputButton m_Interact;
 		public RuntimeInputButton m_Target;

@@ -43,6 +43,8 @@ namespace CR
 		public void PlaySpellAnimation(SpellAnimationType animationType, bool isReleasePhase,
 			float fixedTransitionDuration, bool useUpperBody = true)
 		{
+			string stateName = GetSpellStateName(animationType, isReleasePhase);
+			if (string.IsNullOrEmpty(stateName)) return;
 			int spellLayer = SpellLayerIndex;
 			int upperLayer = UpperBodyLayerIndex;
 			if (spellLayer < 0 || upperLayer < 0)
@@ -51,8 +53,11 @@ namespace CR
 				return;
 			}
 
-			string stateName = GetSpellStateName(animationType, isReleasePhase);
-			if (string.IsNullOrEmpty(stateName)) return;
+			if (!m_Animator.HasState(spellLayer, Animator.StringToHash("SpellLayer." + stateName)))
+			{
+				Debug.LogError($"Spell animation state {stateName} was not found.", this);
+				return;
+			}
 			bool wasPlaying = m_HasSpellPlayback;
 			m_HasSpellPlayback = true;
 			m_IsSpellStopping = false;
@@ -125,17 +130,18 @@ namespace CR
 			return m_UseUpperBodySpellLayer || (m_IsSpellRelease && IsLocomotionRequested());
 		}
 
-		private static string GetSpellStateName(SpellAnimationType animationType, bool isReleasePhase)
+		public static string GetSpellStateName(SpellAnimationType animationType, bool isReleasePhase)
 		{
-			if (isReleasePhase)
-				return animationType == SpellAnimationType.CastDirected || animationType == SpellAnimationType.ChannelDirected
-					? "CastSpellDirectedFinish" : "CastSpellOmniFinish";
 			switch (animationType)
 			{
-				case SpellAnimationType.CastDirected: return "CastSpellDirected";
-				case SpellAnimationType.CastOmnidirectional: return "CastingSpellOmni";
-				case SpellAnimationType.ChannelDirected: return "ChannelCastDirected";
-				case SpellAnimationType.ChannelOmnidirectional: return "ChannelCastOmni";
+				case SpellAnimationType.CastDirected:
+					return isReleasePhase ? "CastSpellDirectedFinish" : "CastSpellDirected";
+				case SpellAnimationType.CastOmnidirectional:
+					return isReleasePhase ? "CastSpellOmniFinish" : "CastingSpellOmni";
+				case SpellAnimationType.ChannelDirected:
+					return isReleasePhase ? "CastSpellDirectedFinish" : "ChannelCastDirected";
+				case SpellAnimationType.ChannelOmnidirectional:
+					return isReleasePhase ? "CastSpellOmniFinish" : "ChannelCastOmni";
 				default: return null;
 			}
 		}

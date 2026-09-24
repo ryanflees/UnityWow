@@ -13,6 +13,9 @@ namespace CR
         [Tooltip("Assign a camera prefab here. It is created with the player when the scene starts.")]
         public TPCameraController m_CameraPrefab;
         [Min(0.01f)] public float m_CharacterScale = 1.2f;
+		public SpellConfigCollection m_SpellCollection;
+		public int m_TestSpellId;
+		public ActionBarPresenter m_ActionBarPresenter;
 
         public PlayerController Player { get; private set; }
 
@@ -26,10 +29,12 @@ namespace CR
 
             Player = PlayerSpawner.SpawnWithCameraPrefab(m_PlayerPrefab, m_SpawnPoint.transform, m_CameraPrefab,
                 m_CharacterPrefab, ConfigureCharacter);
+			if (m_ActionBarPresenter != null) m_ActionBarPresenter.Bind(Player);
         }
 
         private void OnDestroy()
         {
+			if (m_ActionBarPresenter != null) m_ActionBarPresenter.Bind(null);
             if (Player != null) Destroy(Player.gameObject);
         }
 
@@ -53,19 +58,27 @@ namespace CR
             character.m_Animator = animator;
             CharacterLookAtIk lookAt = character.m_LookAtIk != null ? character.m_LookAtIk : visual.GetComponent<CharacterLookAtIk>();
             if (lookAt == null) lookAt = visual.AddComponent<CharacterLookAtIk>();
+#if UNITY_EDITOR
+            lookAt.m_EditorTuningSource = m_CharacterPrefab.GetComponent<CharacterLookAtIk>();
+#endif
             lookAt.m_Animator = animator;
             lookAt.m_BaseTransform = player.m_CharacterRoot;
             lookAt.m_Head = animator.GetBoneTransform(HumanBodyBones.Head);
             lookAt.m_BodyBone = animator.GetBoneTransform(HumanBodyBones.Chest);
-            lookAt.m_EnableBody = true;
-            lookAt.m_BodyWeight = 0.771f;
-            lookAt.m_Weight = 0.829f;
-            lookAt.m_HeadWeight = 0.663f;
-            lookAt.m_MaxAngle = 85f;
-            lookAt.m_TargetDistance = 8f;
-            lookAt.m_TargetHeight = 1.45f;
             lookAt.m_UseTargetTransform = false;
             character.m_LookAtIk = lookAt;
+
+			if (m_SpellCollection != null)
+			{
+				SpellPresentation presentation = player.gameObject.AddComponent<SpellPresentation>();
+				presentation.m_Character = character;
+				player.m_SpellController = player.gameObject.AddComponent<SpellController>();
+				player.m_SpellController.m_SpellCollection = m_SpellCollection;
+				player.m_SpellController.m_Presentation = presentation;
+				player.m_SpellController.m_Attributes = player.GetComponent<ActorAttributes>() ?? player.gameObject.AddComponent<ActorAttributes>();
+				player.m_ActionBar.BindSpell(0, m_TestSpellId);
+				player.m_ActionBar.BindSpell(3, m_TestSpellId);
+			}
         }
     }
 }

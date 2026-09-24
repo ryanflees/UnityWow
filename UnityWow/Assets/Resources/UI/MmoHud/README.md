@@ -1,11 +1,11 @@
 # Minimal MMO HUD
 
-This is a visual HUD foundation, not a combat or targeting implementation.
+This is a visual HUD foundation. The Playground scene now binds action slots 1 and 4 to the player's Instant Omni animation test; health and targeting remain visual examples.
 
 - Art: Assets/Art/UI/MinimalMmo/Textures and Sprites.
-- Prefabs: Assets/UI/MmoHud/Prefabs (MmoHud, ActionBar, AbilitySlot, PlayerFrame, TargetFrame).
+- Prefabs: Assets/Resources/UI/MmoHud/Prefabs (MmoHud, ActionBar, AbilitySlot, PlayerFrame, TargetFrame).
 - Preview scene: Assets/Workshop/Playground/PlaygroundKCC.unity.
-- Bottom-center action bar contains twelve empty slots with editable key labels.
+- Bottom-center action bar contains twelve slots with editable key labels. In PlaygroundKCC, slots 1 and 4 display the same test spell icon and support clicking or their number key; the remaining slots are empty.
 - Player and target frames use circular portrait placeholders, thin health/resource strips and editable labels. Values are visual examples, not bound to gameplay.
 - Uses standard UnityEngine.UI.Text and LegacyRuntime.ttf. No TextMeshPro.
 - Canvas scales with a 1920 x 1080 reference resolution. Frames are anchored to upper corners; action bar is bottom-center.

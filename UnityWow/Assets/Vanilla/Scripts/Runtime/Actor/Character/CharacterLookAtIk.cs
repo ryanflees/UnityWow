@@ -8,7 +8,9 @@ namespace CR
 	[DefaultExecutionOrder(10000)]
 	public partial class CharacterLookAtIk : MonoBehaviour
 	{
-		[Header("Look At")]
+#if UNITY_EDITOR
+		[System.NonSerialized] public CharacterLookAtIk m_EditorTuningSource;
+#endif
 		[Tooltip("Enable LookAt independently of the upper-body pose correction.")]
 		public bool m_Enable = true;
 		public Animator m_Animator;
@@ -156,7 +158,7 @@ namespace CR
 			}
 
 			float desiredYaw = GetPlanarYaw(targetDirection.normalized);
-			float fullWeight = Mathf.Clamp01(m_Weight) * (1f - m_UpperBodyPoseWeight);
+			float fullWeight = Mathf.Clamp01(m_Weight) * (1f - m_UpperBodyPoseWeight * Mathf.Clamp01(m_UpperBodyLookAtSuppression));
 			ApplyBodyLookAt(desiredYaw, fullWeight);
 			ApplyHeadLookAt(fullWeight);
 		}

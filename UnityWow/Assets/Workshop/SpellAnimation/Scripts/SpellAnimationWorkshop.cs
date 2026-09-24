@@ -13,7 +13,6 @@ namespace CR
 		public Character m_Character;
 		public SpellConfigCollection m_SpellCollection;
 		[Min(0f)] public float m_TransitionDuration = 0.12f;
-		[Min(0f)] public float m_ReleaseAnimationDuration = 1.1f;
 		public bool m_ShowInterface = true;
 		public bool m_UseUpperBodyLayer = true;
 		public bool m_EnableForwardIk = true;
@@ -34,8 +33,7 @@ namespace CR
 		private UnityEngine.UI.Text m_RepeatLabel;
 		private UnityEngine.UI.Text m_UpperBodyPoseStatus;
 		private UnityEngine.UI.Text m_SpellLayerStatus;
-		private AnimationClip m_DirectedReleaseClip;
-		private AnimationClip m_OmniReleaseClip;
+		private SpellPresentation m_SpellPresentation;
 		private int m_LastInstantIndex = 1;
 		private float m_RepeatElapsed;
 		private readonly UnityEngine.UI.Button[] m_DirectionButtons = new UnityEngine.UI.Button[9];
@@ -71,7 +69,7 @@ namespace CR
 		{
 			if (m_UseUpperBodyLayer == enabled) return;
 			m_UseUpperBodyLayer = enabled;
-			if (m_Character != null) m_Character.SetUpperBodySpellLayerEnabled(enabled);
+			if (m_SpellPresentation != null) m_SpellPresentation.SetUpperBodyLayerEnabled(enabled);
 		}
 
 		public void Configure(Character character, SpellConfigCollection spellCollection = null)
@@ -106,11 +104,10 @@ namespace CR
 			lookAt.m_EnableBody = true;
 			lookAt.m_BodyWeight = 0.35f;
 			lookAt.Calibrate();
-			foreach (AnimationClip clip in m_Character.m_Animator.runtimeAnimatorController.animationClips)
-			{
-				if (clip.name == "SpellCastDirected") m_DirectedReleaseClip = clip;
-				if (clip.name == "SpellCastOmni") m_OmniReleaseClip = clip;
-			}
+			m_SpellPresentation = GetComponent<SpellPresentation>() ?? gameObject.AddComponent<SpellPresentation>();
+			m_SpellPresentation.m_Character = m_Character;
+			m_SpellPresentation.m_TransitionDuration = m_TransitionDuration;
+			m_SpellPresentation.SetUpperBodyLayerEnabled(m_UseUpperBodyLayer);
 			BuildInterface();
 			m_Character.StopSpellAnimation(0f);
 			RefreshInterface();
@@ -196,7 +193,7 @@ namespace CR
 			}
 			m_Character.m_LookAtIk.m_Enable = m_EnableForwardIk;
 			m_Character.SetLookAtDirection(m_ReferenceRotation * Vector3.forward, Vector3.up);
-			m_Character.m_LookAtIk.SetUpperBodyReferenceRotation(m_ReferenceRotation);
+			m_SpellPresentation.SetFacing(m_ReferenceRotation);
 		}
 
 		public void ResetPosition()
@@ -225,6 +222,11 @@ namespace CR
 			}
 
 			m_PhaseElapsed += Time.deltaTime;
+			if (m_Phase == SpellTestPhase.Release)
+			{
+				if (!m_SpellPresentation.IsPlaying) EndSpell();
+				return;
+			}
 			if (m_PhaseElapsed < m_PhaseDuration)
 			{
 				return;
@@ -232,12 +234,10 @@ namespace CR
 
 			if (m_Phase == SpellTestPhase.Casting)
 			{
-				m_Character.PlaySpellAnimation(m_ActiveSpell.m_Presentation.m_AnimationType, true,
-					m_TransitionDuration, m_UseUpperBodyLayer);
-				StartUpperBodyPose(m_ActiveSpell.m_Presentation.m_AnimationType);
+				if (!PlaySpellPresentation(true)) return;
 				m_Phase = SpellTestPhase.Release;
 				m_PhaseElapsed = 0f;
-				m_PhaseDuration = m_ReleaseAnimationDuration;
+				m_PhaseDuration = 0f;
 				return;
 			}
 
@@ -246,15 +246,18 @@ namespace CR
 
 		public void BeginSpell(int index)
 		{
-			if (index < 0 || index >= m_SpellCollection.m_SpellList.Count)
+			if (m_SpellCollection == null || m_SpellPresentation == null || index < 0 ||
+				index >= m_SpellCollection.m_SpellList.Count)
 			{
 				return;
 			}
 
+			SpellDefinition spell = m_SpellCollection.m_SpellList[index];
+			if (spell == null || spell.m_Cast == null || spell.m_Presentation == null ||
+				spell.m_Cast.m_Type == SpellCastType.Passive) return;
 			EndSpell();
-			m_ActiveSpell = m_SpellCollection.m_SpellList[index];
+			m_ActiveSpell = spell;
 			SpellCastData cast = m_ActiveSpell.m_Cast;
-			SpellAnimationType animationType = m_ActiveSpell.m_Presentation.m_AnimationType;
 			if (cast.m_Type != SpellCastType.Instant)
 			{
 				m_RepeatInstantSpell = false;
@@ -266,18 +269,17 @@ namespace CR
 			{
 				case SpellCastType.Instant:
 					m_LastInstantIndex = index;
-					m_Character.PlaySpellAnimation(animationType, true, m_TransitionDuration, m_UseUpperBodyLayer);
-					StartUpperBodyPose(animationType);
+					if (!PlaySpellPresentation(true)) return;
 					m_Phase = SpellTestPhase.Release;
-					m_PhaseDuration = m_ReleaseAnimationDuration;
+					m_PhaseDuration = 0f;
 					break;
 				case SpellCastType.CastTime:
-					m_Character.PlaySpellAnimation(animationType, false, m_TransitionDuration, m_UseUpperBodyLayer);
+					if (!PlaySpellPresentation(false)) return;
 					m_Phase = SpellTestPhase.Casting;
 					m_PhaseDuration = cast.m_CastTime;
 					break;
 				case SpellCastType.Channeled:
-					m_Character.PlaySpellAnimation(animationType, false, m_TransitionDuration, m_UseUpperBodyLayer);
+					if (!PlaySpellPresentation(false)) return;
 					m_Phase = SpellTestPhase.Channeling;
 					m_PhaseDuration = cast.m_ChannelDuration;
 					break;
@@ -293,14 +295,14 @@ namespace CR
 			EndSpell();
 		}
 
-		private void StartUpperBodyPose(SpellAnimationType animationType)
+		private bool PlaySpellPresentation(bool isReleasePhase)
 		{
-			bool directed = animationType == SpellAnimationType.CastDirected ||
-				animationType == SpellAnimationType.ChannelDirected;
-			AnimationClip clip = directed ? m_DirectedReleaseClip : m_OmniReleaseClip;
-			int stateHash = Animator.StringToHash(directed ? "CastSpellDirectedFinish" : "CastSpellOmniFinish");
-			if (!m_Character.m_LookAtIk.PlayUpperBodyPose(clip, stateHash, m_Character.SpellLayerIndex, m_ReferenceRotation))
-				Debug.LogWarning("Upper-body stabilization requires a valid Humanoid release clip and chest bone.", this);
+			m_SpellPresentation.m_TransitionDuration = m_TransitionDuration;
+			m_SpellPresentation.SetUpperBodyLayerEnabled(m_UseUpperBodyLayer);
+			if (m_SpellPresentation.Play(m_ActiveSpell, isReleasePhase, m_ReferenceRotation)) return true;
+			Debug.LogError("The selected spell cannot be played by this character.", this);
+			StopSpell();
+			return false;
 		}
 
 		private void ToggleUpperBodyPose()
@@ -310,11 +312,7 @@ namespace CR
 
 		private void EndSpell()
 		{
-			if (m_Character != null && m_Character.m_LookAtIk != null) m_Character.m_LookAtIk.StopUpperBodyPose();
-			if (m_Character != null)
-			{
-				m_Character.StopSpellAnimation(m_TransitionDuration);
-			}
+			if (m_SpellPresentation != null) m_SpellPresentation.Stop();
 
 			m_ActiveSpell = null;
 			m_Phase = SpellTestPhase.Idle;
@@ -357,13 +355,15 @@ namespace CR
 			Animator animator = m_Character.m_Animator;
 			m_SpellLayerStatus.text = $"Spell: {animator.GetLayerWeight(m_Character.SpellLayerIndex):0.00} | Upper: {animator.GetLayerWeight(m_Character.UpperBodyLayerIndex):0.00} | Phase: {m_Character.SpellNormalizedTime:0.00}";
 
-			float progress = m_PhaseDuration <= 0f ? 0f : Mathf.Clamp01(m_PhaseElapsed / m_PhaseDuration);
+			float progress = m_Phase == SpellTestPhase.Release ? Mathf.Clamp01(m_Character.SpellNormalizedTime) :
+				m_PhaseDuration <= 0f ? 0f : Mathf.Clamp01(m_PhaseElapsed / m_PhaseDuration);
 			m_ProgressFill.anchorMax = new Vector2(progress, 1f);
 			m_ProgressFillImage.color = m_Phase == SpellTestPhase.Channeling
 				? new Color(0.62f, 0.38f, 0.95f)
 				: new Color(0.2f, 0.68f, 1f);
 			m_ProgressLabel.text = m_Phase == SpellTestPhase.Idle
 				? "READY"
+				: m_Phase == SpellTestPhase.Release ? $"RELEASE / {progress:P0}"
 				: $"{m_PhaseElapsed:0.0} / {m_PhaseDuration:0.0}s";
 		}
 

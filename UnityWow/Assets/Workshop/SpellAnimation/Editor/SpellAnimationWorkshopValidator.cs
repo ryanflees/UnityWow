@@ -103,10 +103,27 @@ namespace CR
 				ValidateCurrentState(animator, 1, "CastSpellDirectedFinish");
 				workshop.SetMovementDirection(Vector2.up);
 				workshop.BeginSpell(1);
-				yield return new WaitForSeconds(workshop.m_ReleaseAnimationDuration + 0.25f);
+				float completionDeadline = Time.time + 5f;
+				while (workshop.m_Character.IsPlayingSpellAnimation && Time.time < completionDeadline) yield return null;
+				yield return null;
 				ValidateCurrentState(animator, 0, "MoveForwardBT");
 				if (animator.GetLayerWeight(1) > 0.01f || animator.GetLayerWeight(2) > 0.01f) throw new InvalidOperationException("Completed release did not clear the upper layer.");
-				string report = $"Passed {combinations} direction/instant combinations, translation, IK targets, cancellation, start/stop/direction changes during release, and timed completion.\n";
+				SpellPresentation presentation = workshop.GetComponent<SpellPresentation>();
+				workshop.BeginSpell(0);
+				try
+				{
+					presentation.enabled = false;
+					if (presentation.IsPlaying || animator.GetLayerWeight(1) != 0f || animator.GetLayerWeight(2) != 0f)
+						throw new InvalidOperationException("Disabling presentation did not clear spell playback and layers.");
+					if (presentation.Play(workshop.m_SpellCollection.m_SpellList[0], true, Quaternion.identity))
+						throw new InvalidOperationException("Disabled presentation accepted another animation request.");
+				}
+				finally
+				{
+					presentation.enabled = true;
+					workshop.StopSpell();
+				}
+				string report = $"Passed {combinations} direction/instant combinations, translation, IK targets, cancellation, start/stop/direction changes during release, animation completion, and presentation disable cleanup.\n";
 				Directory.CreateDirectory("Temp");
 				File.WriteAllText("Temp/MovingInstantValidation.txt", report);
 				Debug.Log(report);
