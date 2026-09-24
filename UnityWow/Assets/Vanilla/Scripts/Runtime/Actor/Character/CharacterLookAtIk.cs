@@ -4,9 +4,12 @@ using UnityEngine;
 
 namespace CR
 {
+	[DisallowMultipleComponent]
 	[DefaultExecutionOrder(10000)]
-	public class CharacterLookAtIk : MonoBehaviour
+	public partial class CharacterLookAtIk : MonoBehaviour
 	{
+		[Header("Look At")]
+		[Tooltip("Enable LookAt independently of the upper-body pose correction.")]
 		public bool m_Enable = true;
 		public Animator m_Animator;
 		public Transform m_BaseTransform;
@@ -114,6 +117,18 @@ namespace CR
 
 		private void LateUpdate()
 		{
+			Evaluate(Time.deltaTime);
+		}
+
+		public void Evaluate(float deltaTime)
+		{
+			if (!isActiveAndEnabled) return;
+			EvaluateUpperBodyPose(deltaTime);
+			EvaluateLookAt();
+		}
+
+		private void EvaluateLookAt()
+		{
 			if (!m_Enable || m_Target == null)
 			{
 				return;
@@ -141,9 +156,9 @@ namespace CR
 			}
 
 			float desiredYaw = GetPlanarYaw(targetDirection.normalized);
-			float fullWeight = Mathf.Clamp01(m_Weight);
-			float bodyYaw = ApplyBodyLookAt(desiredYaw, fullWeight);
-			ApplyHeadLookAt(desiredYaw, bodyYaw, fullWeight);
+			float fullWeight = Mathf.Clamp01(m_Weight) * (1f - m_UpperBodyPoseWeight);
+			ApplyBodyLookAt(desiredYaw, fullWeight);
+			ApplyHeadLookAt(fullWeight);
 		}
 
 		private float ApplyBodyLookAt(float desiredYaw, float fullWeight)
@@ -163,15 +178,22 @@ namespace CR
 			return bodyYaw;
 		}
 
-		private void ApplyHeadLookAt(float desiredYaw, float inheritedBodyYaw, float fullWeight)
+		private void ApplyHeadLookAt(float fullWeight)
 		{
-			float headYaw = desiredYaw * fullWeight * Mathf.Clamp01(m_HeadWeight) - inheritedBodyYaw;
+			Quaternion sourceRotation = GetHeadSourceRotation();
+			Vector3 currentForward = Vector3.ProjectOnPlane(sourceRotation * Vector3.forward, m_Up);
+			Vector3 targetForward = Vector3.ProjectOnPlane(m_Target.position - m_Head.position, m_Up);
+			if (currentForward.sqrMagnitude < 0.0001f || targetForward.sqrMagnitude < 0.0001f) return;
+			// Measure what remains after animation, stabilization, and the body look-at correction.
+			float remainingYaw = Vector3.SignedAngle(currentForward, targetForward, m_Up);
+			float headYaw = Mathf.Clamp(remainingYaw, -Mathf.Abs(m_MaxAngle), Mathf.Abs(m_MaxAngle)) *
+				fullWeight * Mathf.Clamp01(m_HeadWeight);
 			if (Mathf.Abs(headYaw) <= 0.0001f)
 			{
 				return;
 			}
 
-			m_Head.rotation = Quaternion.AngleAxis(headYaw, m_Up) * GetHeadSourceRotation();
+			m_Head.rotation = Quaternion.AngleAxis(headYaw, m_Up) * sourceRotation;
 		}
 
 		private void OnDrawGizmosSelected()

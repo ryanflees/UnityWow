@@ -1,6 +1,7 @@
 // Copyright (c) 2026 CatRabbit. All rights reserved.
 
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -16,6 +17,106 @@ namespace CR
 		private const string m_ReportPath = "Assets/Workshop/SpellAnimation/Reports/Validation.txt";
 		private const string m_WorkshopScenePath = "Assets/Workshop/SpellAnimation/Scenes/SpellAnimationWorkshop.unity";
 		private const string m_WorkshopScriptPath = "Assets/Workshop/SpellAnimation/Scripts/SpellAnimationWorkshop.cs";
+
+		[MenuItem("CR/Workshop/Validate Moving Instant Spells (Play Mode)")]
+		public static void ValidateMovingInstantSpells()
+		{
+			SpellAnimationWorkshop workshop = UnityEngine.Object.FindFirstObjectByType<SpellAnimationWorkshop>();
+			if (!Application.isPlaying || workshop == null)
+				throw new InvalidOperationException("Run the Spell Animation Workshop in Play Mode first.");
+			workshop.StartCoroutine(ValidateMovementSequence(workshop));
+		}
+
+		private static IEnumerator ValidateMovementSequence(SpellAnimationWorkshop workshop)
+		{
+			bool originalInPlace = workshop.m_MoveInPlace;
+			bool originalUpperBody = workshop.m_UseUpperBodyLayer;
+			bool originalIk = workshop.m_EnableForwardIk;
+			Animator animator = workshop.m_Character.m_Animator;
+			CharacterLookAtIk lookAt = workshop.m_Character.m_LookAtIk;
+			Vector3 forward = workshop.m_Character.transform.forward;
+			int combinations = 0;
+			try
+			{
+				workshop.ResetPosition();
+				forward = workshop.m_Character.transform.forward;
+				workshop.m_MoveInPlace = false;
+				workshop.m_UseUpperBodyLayer = false;
+				workshop.m_EnableForwardIk = true;
+				for (int y = -1; y <= 1; y++)
+				{
+					for (int x = -1; x <= 1; x++)
+					{
+						Vector2 direction = new Vector2(x, y);
+						workshop.StopSpell();
+						workshop.SetMovementDirection(direction);
+						yield return new WaitForSeconds(0.35f);
+						for (int spell = 0; spell < 2; spell++)
+						{
+							Vector3 position = workshop.m_Character.transform.position;
+							workshop.BeginSpell(spell);
+							yield return new WaitForSeconds(0.25f);
+							string release = spell == 0 ? "CastSpellDirectedFinish" : "CastSpellOmniFinish";
+							ValidateCurrentState(animator, 1, release);
+							ValidateCurrentState(animator, 0, direction == Vector2.zero ? release :
+								y < 0 ? "Movebackward" : "MoveForwardBT");
+							Vector3 delta = workshop.m_Character.transform.position - position;
+							if (direction != Vector2.zero)
+							{
+								if (animator.GetLayerWeight(1) < 0.99f || delta.sqrMagnitude < 0.001f)
+									throw new InvalidOperationException($"Movement/release failed for {direction}, spell {spell}.");
+								Vector3 expected = Quaternion.LookRotation(forward) * new Vector3(x, 0f, y).normalized;
+								if (Vector3.Angle(delta, expected) > 1f)
+									throw new InvalidOperationException("Movement does not match the selected direction.");
+							}
+							else if (delta.sqrMagnitude > 0.0001f)
+								throw new InvalidOperationException("Standing release moved the preview character.");
+							if (!lookAt.m_Enable || lookAt.m_Head == null || lookAt.m_BodyBone == null ||
+								Vector3.Angle(lookAt.m_Target.position - (workshop.m_Character.transform.position +
+								Vector3.up * lookAt.m_TargetHeight), forward) > 1f)
+								throw new InvalidOperationException("Forward IK is not configured or has drifted with movement.");
+							workshop.StopSpell();
+							yield return new WaitForSeconds(0.2f);
+							ValidateCurrentState(animator, 0, direction == Vector2.zero ? "Stand" :
+								y < 0 ? "Movebackward" : "MoveForwardBT");
+							combinations++;
+						}
+					}
+				}
+				workshop.ResetPosition();
+				workshop.BeginSpell(0);
+				yield return new WaitForSeconds(0.2f);
+				workshop.SetMovementDirection(Vector2.right);
+				yield return new WaitForSeconds(0.25f);
+				ValidateCurrentState(animator, 0, "MoveForwardBT");
+				ValidateCurrentState(animator, 1, "CastSpellDirectedFinish");
+				if (animator.GetLayerWeight(1) < 0.99f) throw new InvalidOperationException("Starting to move lost the active release.");
+				workshop.SetMovementDirection(Vector2.down);
+				yield return new WaitForSeconds(0.2f);
+				ValidateCurrentState(animator, 0, "Movebackward");
+				workshop.SetMovementDirection(Vector2.zero);
+				yield return new WaitForSeconds(0.2f);
+				ValidateCurrentState(animator, 0, "Stand");
+				ValidateCurrentState(animator, 1, "CastSpellDirectedFinish");
+				workshop.SetMovementDirection(Vector2.up);
+				workshop.BeginSpell(1);
+				yield return new WaitForSeconds(workshop.m_ReleaseAnimationDuration + 0.25f);
+				ValidateCurrentState(animator, 0, "MoveForwardBT");
+				if (animator.GetLayerWeight(1) > 0.01f) throw new InvalidOperationException("Completed release did not clear the upper layer.");
+				string report = $"Passed {combinations} direction/instant combinations, translation, IK targets, cancellation, start/stop/direction changes during release, and timed completion.\n";
+				Directory.CreateDirectory("Temp");
+				File.WriteAllText("Temp/MovingInstantValidation.txt", report);
+				Debug.Log(report);
+			}
+			finally
+			{
+				workshop.StopSpell();
+				workshop.ResetPosition();
+				workshop.m_MoveInPlace = originalInPlace;
+				workshop.m_UseUpperBodyLayer = originalUpperBody;
+				workshop.m_EnableForwardIk = originalIk;
+			}
+		}
 
 		[MenuItem("CR/Workshop/Validate Spell Animations")]
 		public static string Validate()
