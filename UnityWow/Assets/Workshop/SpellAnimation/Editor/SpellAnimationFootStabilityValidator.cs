@@ -62,16 +62,17 @@ namespace CR
                 animator.applyRootMotion = false;
                 animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 animator.Rebind();
-                animator.SetLayerWeight(1, 0f);
+                animator.SetLayerWeight(1, 1f);
+                animator.SetLayerWeight(2, 1f);
                 foreach (string stateName in m_States)
                 {
-                    AnimatorState state = Array.Find(controller.layers[0].stateMachine.states,
+                    AnimatorState state = Array.Find(controller.layers[1].stateMachine.states,
                         child => child.state.name == stateName).state;
                     if (state == null || !state.iKOnFeet || !(state.motion is AnimationClip))
                         throw new InvalidOperationException($"{stateName} requires a clip with Foot IK enabled.");
                     FootStabilitySample sample = Measure(animator, stateName, 121, index =>
                     {
-                        animator.Play("Base Layer." + stateName, 0, index / 120f);
+                        animator.Play("SpellLayer." + stateName, 1, index / 120f);
                         animator.Update(0f);
                     });
                     report.clips.Add(sample);
@@ -82,9 +83,9 @@ namespace CR
                 string[] releaseStates = { "CastSpellDirectedFinish", "CastSpellOmniFinish" };
                 for (int pairIndex = 0; pairIndex < readyStates.Length; pairIndex++)
                 {
-                    animator.Play("Base Layer." + readyStates[pairIndex], 0, 0.5f);
+                    animator.Play("SpellLayer." + readyStates[pairIndex], 1, 0.5f);
                     animator.Update(0f);
-                    animator.CrossFadeInFixedTime("Base Layer." + releaseStates[pairIndex], 0.12f, 0, 0f);
+                    animator.CrossFadeInFixedTime("SpellLayer." + releaseStates[pairIndex], 0.12f, 1, 0f);
                     FootStabilitySample sample = Measure(animator,
                         readyStates[pairIndex] + " -> " + releaseStates[pairIndex], 16,
                         index => animator.Update(index == 0 ? 0f : 0.01f));

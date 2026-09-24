@@ -4,7 +4,8 @@ using UnityEngine;
 
 namespace CR
 {
-	public class Character : MonoBehaviour
+	[DefaultExecutionOrder(100)]
+	public partial class Character : MonoBehaviour
 	{
 		public Animator m_Animator;
 		public CharacterLookAtIk m_LookAtIk;
@@ -145,79 +146,6 @@ namespace CR
 		public bool IsPlayingAirborneAnimation() => IsAnimatorInAnyState(L_0__JUMP_START_ID,
 			L_0__JUMP_LOOP_ID);
 
-		public void PlaySpellAnimation(SpellAnimationType animationType, bool isReleasePhase,
-			float fixedTransitionDuration, bool useUpperBody = true)
-		{
-			if (m_Animator == null)
-			{
-				return;
-			}
-
-			if (isReleasePhase)
-			{
-				bool preserveLocomotion = useUpperBody && IsLocomotionRequested();
-				m_Animator.SetLayerWeight(LAYER_1, useUpperBody ? 1f : 0f);
-				if (animationType == SpellAnimationType.CastDirected ||
-					animationType == SpellAnimationType.ChannelDirected)
-				{
-					if (useUpperBody) PlayCastSpellDirectedFinish_1(fixedTransitionDuration);
-					if (!preserveLocomotion)
-					{
-						PlayCastSpellDirectedFinish(fixedTransitionDuration);
-					}
-				}
-				else
-				{
-					if (useUpperBody) PlayCastSpellOmniFinish_1(fixedTransitionDuration);
-					if (!preserveLocomotion)
-					{
-						PlayCastSpellOmniFinish(fixedTransitionDuration);
-					}
-				}
-				if (!preserveLocomotion)
-				{
-					// Idle requests must not interrupt Finish; the controller returns to Stand.
-					m_CurrentState = CharacterAnimationState.Stand;
-				}
-				return;
-			}
-
-			m_Animator.SetLayerWeight(LAYER_1, 0f);
-			m_CurrentState = CharacterAnimationState.None;
-			switch (animationType)
-			{
-				case SpellAnimationType.CastDirected:
-					PlayCastSpellDirected(fixedTransitionDuration);
-					break;
-				case SpellAnimationType.CastOmnidirectional:
-					PlayCastingSpellOmni(fixedTransitionDuration);
-					break;
-				case SpellAnimationType.ChannelDirected:
-					PlayChannelCastDirected(fixedTransitionDuration);
-					break;
-				case SpellAnimationType.ChannelOmnidirectional:
-					PlayChannelCastOmni(fixedTransitionDuration);
-					break;
-			}
-		}
-
-		public void StopSpellAnimation(float fixedTransitionDuration)
-		{
-			if (m_Animator == null)
-			{
-				return;
-			}
-
-			PlayEmpty_1(fixedTransitionDuration);
-			m_Animator.SetLayerWeight(LAYER_1, 0f);
-			if (IsLocomotionRequested())
-			{
-				return;
-			}
-			m_CurrentState = CharacterAnimationState.None;
-			PlayStand();
-		}
-
 		private bool IsLocomotionRequested()
 		{
 			return m_CurrentState == CharacterAnimationState.MoveForward ||
@@ -272,27 +200,32 @@ namespace CR
 		private readonly int L_0__JUMP_LOOP_ID = Animator.StringToHash(L_0__JUMP_LOOP);
 		private const string L_0__JUMP_END = "JumpEnd";
 		private readonly int L_0__JUMP_END_ID = Animator.StringToHash(L_0__JUMP_END);
-		private const string L_0__CASTING_SPELL_OMNI = "CastingSpellOmni";
-		private readonly int L_0__CASTING_SPELL_OMNI_ID = Animator.StringToHash(L_0__CASTING_SPELL_OMNI);
-		private const string L_0__CAST_SPELL_DIRECTED = "CastSpellDirected";
-		private readonly int L_0__CAST_SPELL_DIRECTED_ID = Animator.StringToHash(L_0__CAST_SPELL_DIRECTED);
-		private const string L_0__CHANNEL_CAST_DIRECTED = "ChannelCastDirected";
-		private readonly int L_0__CHANNEL_CAST_DIRECTED_ID = Animator.StringToHash(L_0__CHANNEL_CAST_DIRECTED);
-		private const string L_0__CHANNEL_CAST_OMNI = "ChannelCastOmni";
-		private readonly int L_0__CHANNEL_CAST_OMNI_ID = Animator.StringToHash(L_0__CHANNEL_CAST_OMNI);
-		private const string L_0__CAST_SPELL_DIRECTED_FINISH = "CastSpellDirectedFinish";
-		private readonly int L_0__CAST_SPELL_DIRECTED_FINISH_ID = Animator.StringToHash(L_0__CAST_SPELL_DIRECTED_FINISH);
-		private const string L_0__CAST_SPELL_OMNI_FINISH = "CastSpellOmniFinish";
-		private readonly int L_0__CAST_SPELL_OMNI_FINISH_ID = Animator.StringToHash(L_0__CAST_SPELL_OMNI_FINISH);
 
-		// Layer 1 - UpperBody
+		// Layer 1 - SpellLayer
 		private readonly int LAYER_1 = 1;
-		private const string L_1__EMPTY = "Empty";
-		private readonly int L_1__EMPTY_ID = Animator.StringToHash(L_1__EMPTY);
-		private const string L_1__CAST_SPELL_OMNI_FINISH = "CastSpellOmniFinish";
-		private readonly int L_1__CAST_SPELL_OMNI_FINISH_ID = Animator.StringToHash(L_1__CAST_SPELL_OMNI_FINISH);
 		private const string L_1__CAST_SPELL_DIRECTED_FINISH = "CastSpellDirectedFinish";
 		private readonly int L_1__CAST_SPELL_DIRECTED_FINISH_ID = Animator.StringToHash(L_1__CAST_SPELL_DIRECTED_FINISH);
+		private const string L_1__CAST_SPELL_OMNI_FINISH = "CastSpellOmniFinish";
+		private readonly int L_1__CAST_SPELL_OMNI_FINISH_ID = Animator.StringToHash(L_1__CAST_SPELL_OMNI_FINISH);
+		private const string L_1__EMPTY = "Empty";
+		private readonly int L_1__EMPTY_ID = Animator.StringToHash(L_1__EMPTY);
+		private const string L_1__CASTING_SPELL_OMNI = "CastingSpellOmni";
+		private readonly int L_1__CASTING_SPELL_OMNI_ID = Animator.StringToHash(L_1__CASTING_SPELL_OMNI);
+		private const string L_1__CAST_SPELL_DIRECTED = "CastSpellDirected";
+		private readonly int L_1__CAST_SPELL_DIRECTED_ID = Animator.StringToHash(L_1__CAST_SPELL_DIRECTED);
+		private const string L_1__CHANNEL_CAST_DIRECTED = "ChannelCastDirected";
+		private readonly int L_1__CHANNEL_CAST_DIRECTED_ID = Animator.StringToHash(L_1__CHANNEL_CAST_DIRECTED);
+		private const string L_1__CHANNEL_CAST_OMNI = "ChannelCastOmni";
+		private readonly int L_1__CHANNEL_CAST_OMNI_ID = Animator.StringToHash(L_1__CHANNEL_CAST_OMNI);
+
+		// Layer 2 - UpperBody
+		private readonly int LAYER_2 = 2;
+		private const string L_2__EMPTY = "Empty";
+		private readonly int L_2__EMPTY_ID = Animator.StringToHash(L_2__EMPTY);
+		private const string L_2__CAST_SPELL_OMNI_FINISH = "CastSpellOmniFinish";
+		private readonly int L_2__CAST_SPELL_OMNI_FINISH_ID = Animator.StringToHash(L_2__CAST_SPELL_OMNI_FINISH);
+		private const string L_2__CAST_SPELL_DIRECTED_FINISH = "CastSpellDirectedFinish";
+		private readonly int L_2__CAST_SPELL_DIRECTED_FINISH_ID = Animator.StringToHash(L_2__CAST_SPELL_DIRECTED_FINISH);
 
 
 		// Play Animations Layer 0
@@ -328,42 +261,47 @@ namespace CR
 		{
 			m_Animator.CrossFadeInFixedTime(L_0__JUMP_END_ID, fixedTransitionDuration, LAYER_0);
 		}
-		public void PlayCastingSpellOmni(float fixedTransitionDuration)
-		{
-			m_Animator.CrossFadeInFixedTime(L_0__CASTING_SPELL_OMNI_ID, fixedTransitionDuration, LAYER_0);
-		}
-		public void PlayCastSpellDirected(float fixedTransitionDuration)
-		{
-			m_Animator.CrossFadeInFixedTime(L_0__CAST_SPELL_DIRECTED_ID, fixedTransitionDuration, LAYER_0);
-		}
-		public void PlayChannelCastDirected(float fixedTransitionDuration)
-		{
-			m_Animator.CrossFadeInFixedTime(L_0__CHANNEL_CAST_DIRECTED_ID, fixedTransitionDuration, LAYER_0);
-		}
-		public void PlayChannelCastOmni(float fixedTransitionDuration)
-		{
-			m_Animator.CrossFadeInFixedTime(L_0__CHANNEL_CAST_OMNI_ID, fixedTransitionDuration, LAYER_0);
-		}
-		public void PlayCastSpellDirectedFinish(float fixedTransitionDuration)
-		{
-			m_Animator.CrossFadeInFixedTime(L_0__CAST_SPELL_DIRECTED_FINISH_ID, fixedTransitionDuration, LAYER_0);
-		}
-		public void PlayCastSpellOmniFinish(float fixedTransitionDuration)
-		{
-			m_Animator.CrossFadeInFixedTime(L_0__CAST_SPELL_OMNI_FINISH_ID, fixedTransitionDuration, LAYER_0);
-		}
 		// Play Animations Layer 1
-		public void PlayEmpty_1(float fixedTransitionDuration)
+		public void PlayCastSpellDirectedFinish_1(float fixedTransitionDuration)
 		{
-			m_Animator.CrossFadeInFixedTime(L_1__EMPTY_ID, fixedTransitionDuration, LAYER_1);
+			m_Animator.CrossFadeInFixedTime(L_1__CAST_SPELL_DIRECTED_FINISH_ID, fixedTransitionDuration, LAYER_1);
 		}
 		public void PlayCastSpellOmniFinish_1(float fixedTransitionDuration)
 		{
 			m_Animator.CrossFadeInFixedTime(L_1__CAST_SPELL_OMNI_FINISH_ID, fixedTransitionDuration, LAYER_1);
 		}
-		public void PlayCastSpellDirectedFinish_1(float fixedTransitionDuration)
+		public void PlayEmpty_1(float fixedTransitionDuration)
 		{
-			m_Animator.CrossFadeInFixedTime(L_1__CAST_SPELL_DIRECTED_FINISH_ID, fixedTransitionDuration, LAYER_1);
+			m_Animator.CrossFadeInFixedTime(L_1__EMPTY_ID, fixedTransitionDuration, LAYER_1);
+		}
+		public void PlayCastingSpellOmni_1(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_1__CASTING_SPELL_OMNI_ID, fixedTransitionDuration, LAYER_1);
+		}
+		public void PlayCastSpellDirected_1(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_1__CAST_SPELL_DIRECTED_ID, fixedTransitionDuration, LAYER_1);
+		}
+		public void PlayChannelCastDirected_1(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_1__CHANNEL_CAST_DIRECTED_ID, fixedTransitionDuration, LAYER_1);
+		}
+		public void PlayChannelCastOmni_1(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_1__CHANNEL_CAST_OMNI_ID, fixedTransitionDuration, LAYER_1);
+		}
+		// Play Animations Layer 2
+		public void PlayEmpty_2(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_2__EMPTY_ID, fixedTransitionDuration, LAYER_2);
+		}
+		public void PlayCastSpellOmniFinish_2(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_2__CAST_SPELL_OMNI_FINISH_ID, fixedTransitionDuration, LAYER_2);
+		}
+		public void PlayCastSpellDirectedFinish_2(float fixedTransitionDuration)
+		{
+			m_Animator.CrossFadeInFixedTime(L_2__CAST_SPELL_DIRECTED_FINISH_ID, fixedTransitionDuration, LAYER_2);
 		}
 		#endregion
 

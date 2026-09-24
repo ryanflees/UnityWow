@@ -671,7 +671,7 @@ MonoBehaviour:
   m_TransitionDuration: 0.12
   m_ReleaseAnimationDuration: 1.1
   m_ShowInterface: 1
-  m_UseUpperBodyLayer: 0
+  m_UseUpperBodyLayer: 1
   m_EnableForwardIk: 1
   m_MoveInPlace: 0
   m_RepeatInstantSpell: 0

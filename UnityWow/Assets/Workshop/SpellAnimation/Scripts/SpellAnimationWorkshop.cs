@@ -15,7 +15,7 @@ namespace CR
 		[Min(0f)] public float m_TransitionDuration = 0.12f;
 		[Min(0f)] public float m_ReleaseAnimationDuration = 1.1f;
 		public bool m_ShowInterface = true;
-		public bool m_UseUpperBodyLayer = false;
+		public bool m_UseUpperBodyLayer = true;
 		public bool m_EnableForwardIk = true;
 		public bool m_MoveInPlace;
 		public bool m_RepeatInstantSpell;
@@ -33,6 +33,7 @@ namespace CR
 		private UnityEngine.UI.Text m_UpperBodyPoseLabel;
 		private UnityEngine.UI.Text m_RepeatLabel;
 		private UnityEngine.UI.Text m_UpperBodyPoseStatus;
+		private UnityEngine.UI.Text m_SpellLayerStatus;
 		private AnimationClip m_DirectedReleaseClip;
 		private AnimationClip m_OmniReleaseClip;
 		private int m_LastInstantIndex = 1;
@@ -69,10 +70,8 @@ namespace CR
 		public void SetUpperBodyLayerEnabled(bool enabled)
 		{
 			if (m_UseUpperBodyLayer == enabled) return;
-			int activeIndex = m_ActiveSpell == null ? -1 : m_SpellCollection.m_SpellList.IndexOf(m_ActiveSpell);
 			m_UseUpperBodyLayer = enabled;
-			if (activeIndex >= 0) BeginSpell(activeIndex);
-			else StopSpell();
+			if (m_Character != null) m_Character.SetUpperBodySpellLayerEnabled(enabled);
 		}
 
 		public void Configure(Character character, SpellConfigCollection spellCollection = null)
@@ -198,8 +197,6 @@ namespace CR
 			m_Character.m_LookAtIk.m_Enable = m_EnableForwardIk;
 			m_Character.SetLookAtDirection(m_ReferenceRotation * Vector3.forward, Vector3.up);
 			m_Character.m_LookAtIk.SetUpperBodyReferenceRotation(m_ReferenceRotation);
-			if (m_Phase == SpellTestPhase.Release && m_MoveInput != Vector2.zero)
-				m_Character.m_Animator.SetLayerWeight(1, 1f);
 		}
 
 		public void ResetPosition()
@@ -237,7 +234,7 @@ namespace CR
 			{
 				m_Character.PlaySpellAnimation(m_ActiveSpell.m_Presentation.m_AnimationType, true,
 					m_TransitionDuration, m_UseUpperBodyLayer);
-				StartUpperBodyPose(m_ActiveSpell.m_Presentation.m_AnimationType, m_UseUpperBodyLayer ? 1 : 0);
+				StartUpperBodyPose(m_ActiveSpell.m_Presentation.m_AnimationType);
 				m_Phase = SpellTestPhase.Release;
 				m_PhaseElapsed = 0f;
 				m_PhaseDuration = m_ReleaseAnimationDuration;
@@ -269,10 +266,8 @@ namespace CR
 			{
 				case SpellCastType.Instant:
 					m_LastInstantIndex = index;
-					m_Character.PlaySpellAnimation(animationType, true, m_TransitionDuration, true);
-					StartUpperBodyPose(animationType, 1);
-					if (m_MoveInput == Vector2.zero && !m_UseUpperBodyLayer)
-						m_Character.m_Animator.SetLayerWeight(1, 0f);
+					m_Character.PlaySpellAnimation(animationType, true, m_TransitionDuration, m_UseUpperBodyLayer);
+					StartUpperBodyPose(animationType);
 					m_Phase = SpellTestPhase.Release;
 					m_PhaseDuration = m_ReleaseAnimationDuration;
 					break;
@@ -298,13 +293,13 @@ namespace CR
 			EndSpell();
 		}
 
-		private void StartUpperBodyPose(SpellAnimationType animationType, int sourceLayer)
+		private void StartUpperBodyPose(SpellAnimationType animationType)
 		{
 			bool directed = animationType == SpellAnimationType.CastDirected ||
 				animationType == SpellAnimationType.ChannelDirected;
 			AnimationClip clip = directed ? m_DirectedReleaseClip : m_OmniReleaseClip;
 			int stateHash = Animator.StringToHash(directed ? "CastSpellDirectedFinish" : "CastSpellOmniFinish");
-			if (!m_Character.m_LookAtIk.PlayUpperBodyPose(clip, stateHash, sourceLayer, m_ReferenceRotation))
+			if (!m_Character.m_LookAtIk.PlayUpperBodyPose(clip, stateHash, m_Character.SpellLayerIndex, m_ReferenceRotation))
 				Debug.LogWarning("Upper-body stabilization requires a valid Humanoid release clip and chest bone.", this);
 		}
 
@@ -342,9 +337,9 @@ namespace CR
 			m_PhaseLabel.text = $"PHASE  /  {m_Phase}";
 			m_UpperBodyToggle.SetIsOnWithoutNotify(m_UseUpperBodyLayer);
 			m_LayerModeLabel.text = m_UseUpperBodyLayer
-				? "Base + UpperBody (release)"
-				: "Full body / Base only";
-			if (m_MoveInput != Vector2.zero) m_LayerModeLabel.text = "Moving: UpperBody automatic";
+				? "Spell + UpperBody (synchronized)"
+				: "Spell only when standing";
+			if (m_MoveInput != Vector2.zero) m_LayerModeLabel.text = "Moving: Base + UpperBody";
 			for (int i = 0; i < m_Directions.Length; i++)
 			{
 				bool selected = m_Directions[i] == m_MoveInput;
@@ -358,6 +353,9 @@ namespace CR
 			m_RepeatLabel.text = "REPEAT INSTANT / " + (m_RepeatInstantSpell ? "ON" : "OFF");
 			m_UpperBodyPoseStatus.text = $"Weight: {m_Character.m_LookAtIk.UpperBodyPoseWeight:0.00} | Pose offset: {m_Character.m_LookAtIk.UpperBodyRotationError:0.0} deg" +
 				(m_Character.m_LookAtIk.IsUpperBodyTwistLimited ? " | LIMIT" : "");
+
+			Animator animator = m_Character.m_Animator;
+			m_SpellLayerStatus.text = $"Spell: {animator.GetLayerWeight(m_Character.SpellLayerIndex):0.00} | Upper: {animator.GetLayerWeight(m_Character.UpperBodyLayerIndex):0.00} | Phase: {m_Character.SpellNormalizedTime:0.00}";
 
 			float progress = m_PhaseDuration <= 0f ? 0f : Mathf.Clamp01(m_PhaseElapsed / m_PhaseDuration);
 			m_ProgressFill.anchorMax = new Vector2(progress, 1f);
@@ -439,7 +437,7 @@ namespace CR
 		private void BuildMovementInterface(Transform parent)
 		{
 			RectTransform panel = CreateRect("MovementControls", parent, Vector2.one, Vector2.one,
-				Vector2.one, new Vector2(-18f, -82f), new Vector2(330f, 452f));
+				Vector2.one, new Vector2(-18f, -82f), new Vector2(330f, 478f));
 			panel.gameObject.AddComponent<UnityEngine.UI.Image>().color = new Color(0.025f, 0.04f, 0.065f, 0.96f);
 			CreateText(panel, "8-WAY MOVEMENT + INSTANT", new Vector2(14f, -12f), new Vector2(302f, 30f), 19, TextAnchor.MiddleLeft);
 			CreateText(panel, "WASD: hold  |  Buttons: continuous", new Vector2(14f, -44f), new Vector2(302f, 24f), 14, TextAnchor.MiddleLeft);
@@ -469,6 +467,7 @@ namespace CR
 			repeatButton.name = "ToggleRepeatInstantSpell";
 			m_RepeatLabel = repeatButton.GetComponentInChildren<UnityEngine.UI.Text>();
 			m_UpperBodyPoseStatus = CreateText(panel, "", new Vector2(14f, -414f), new Vector2(302f, 26f), 12, TextAnchor.MiddleLeft);
+			m_SpellLayerStatus = CreateText(panel, "", new Vector2(14f, -440f), new Vector2(302f, 26f), 12, TextAnchor.MiddleLeft);
 		}
 
 		private void CreateLayerToggle(Transform parent)

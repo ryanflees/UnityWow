@@ -41,7 +41,7 @@ namespace CR
 				workshop.ResetPosition();
 				forward = workshop.m_Character.transform.forward;
 				workshop.m_MoveInPlace = false;
-				workshop.m_UseUpperBodyLayer = false;
+				workshop.m_UseUpperBodyLayer = true;
 				workshop.m_EnableForwardIk = true;
 				for (int y = -1; y <= 1; y++)
 				{
@@ -58,12 +58,12 @@ namespace CR
 							yield return new WaitForSeconds(0.25f);
 							string release = spell == 0 ? "CastSpellDirectedFinish" : "CastSpellOmniFinish";
 							ValidateCurrentState(animator, 1, release);
-							ValidateCurrentState(animator, 0, direction == Vector2.zero ? release :
+							ValidateCurrentState(animator, 0, direction == Vector2.zero ? "Stand" :
 								y < 0 ? "Movebackward" : "MoveForwardBT");
 							Vector3 delta = workshop.m_Character.transform.position - position;
 							if (direction != Vector2.zero)
 							{
-								if (animator.GetLayerWeight(1) < 0.99f || delta.sqrMagnitude < 0.001f)
+								if (animator.GetLayerWeight(2) < 0.99f || animator.GetLayerWeight(1) > 0.01f || delta.sqrMagnitude < 0.001f)
 									throw new InvalidOperationException($"Movement/release failed for {direction}, spell {spell}.");
 								Vector3 expected = Quaternion.LookRotation(forward) * new Vector3(x, 0f, y).normalized;
 								if (Vector3.Angle(delta, expected) > 1f)
@@ -90,19 +90,22 @@ namespace CR
 				yield return new WaitForSeconds(0.25f);
 				ValidateCurrentState(animator, 0, "MoveForwardBT");
 				ValidateCurrentState(animator, 1, "CastSpellDirectedFinish");
-				if (animator.GetLayerWeight(1) < 0.99f) throw new InvalidOperationException("Starting to move lost the active release.");
+				if (animator.GetLayerWeight(2) < 0.99f || animator.GetLayerWeight(1) > 0.01f) throw new InvalidOperationException("Starting to move did not reveal locomotion.");
 				workshop.SetMovementDirection(Vector2.down);
 				yield return new WaitForSeconds(0.2f);
 				ValidateCurrentState(animator, 0, "Movebackward");
+				float phaseBeforeStop = animator.GetCurrentAnimatorStateInfo(1).normalizedTime;
 				workshop.SetMovementDirection(Vector2.zero);
 				yield return new WaitForSeconds(0.2f);
+				if (animator.GetLayerWeight(1) < 0.99f || animator.GetCurrentAnimatorStateInfo(1).normalizedTime <= phaseBeforeStop)
+					throw new InvalidOperationException("Stopping did not restore the current full-body spell phase.");
 				ValidateCurrentState(animator, 0, "Stand");
 				ValidateCurrentState(animator, 1, "CastSpellDirectedFinish");
 				workshop.SetMovementDirection(Vector2.up);
 				workshop.BeginSpell(1);
 				yield return new WaitForSeconds(workshop.m_ReleaseAnimationDuration + 0.25f);
 				ValidateCurrentState(animator, 0, "MoveForwardBT");
-				if (animator.GetLayerWeight(1) > 0.01f) throw new InvalidOperationException("Completed release did not clear the upper layer.");
+				if (animator.GetLayerWeight(1) > 0.01f || animator.GetLayerWeight(2) > 0.01f) throw new InvalidOperationException("Completed release did not clear the upper layer.");
 				string report = $"Passed {combinations} direction/instant combinations, translation, IK targets, cancellation, start/stop/direction changes during release, and timed completion.\n";
 				Directory.CreateDirectory("Temp");
 				File.WriteAllText("Temp/MovingInstantValidation.txt", report);
@@ -155,7 +158,7 @@ namespace CR
 				ValidateRelease(character, animator, SpellAnimationType.CastOmnidirectional, "CastSpellOmniFinish");
 				character.StopSpellAnimation(0f);
 				animator.Update(0.01f);
-				if (!Mathf.Approximately(animator.GetLayerWeight(1), 0f))
+				if (!Mathf.Approximately(animator.GetLayerWeight(1), 0f) || !Mathf.Approximately(animator.GetLayerWeight(2), 0f))
 				{
 					throw new InvalidOperationException("Stopping a spell did not disable the UpperBody layer.");
 				}
@@ -165,7 +168,7 @@ namespace CR
 				UnityEngine.Object.DestroyImmediate(characterObject);
 			}
 
-			string report = "Validated casting and channel states, synchronized two-layer finishes, forward/backward movement during release, cancellation without interrupting movement, and the UpperBody AvatarMask.";
+			string report = "Validated Base / SpellLayer / synchronized UpperBody, six spell states, continuous zero-weight playback, movement weight blends, restored lower-body spell pose, repeated start/stop, overlay toggling, cancellation and automatic exit.";
 			Directory.CreateDirectory(Path.GetDirectoryName(m_ReportPath));
 			File.WriteAllText(m_ReportPath, report + "\n");
 			AssetDatabase.ImportAsset(m_ReportPath);
@@ -190,14 +193,15 @@ namespace CR
 
 		private static void ValidateController(AnimatorController controller)
 		{
-			if (controller.layers.Length < 2)
+			if (controller.layers.Length != 3)
 			{
-				throw new InvalidOperationException("WowGirl AnimatorController requires Base Layer and UpperBody layers.");
+				throw new InvalidOperationException("WowGirl AnimatorController requires Base Layer, SpellLayer and UpperBody layers.");
 			}
 
 			AnimatorControllerLayer baseLayer = controller.layers[0];
-			AnimatorControllerLayer upperBodyLayer = controller.layers[1];
-			if (baseLayer.name != "Base Layer" || upperBodyLayer.name != "UpperBody")
+			AnimatorControllerLayer spellLayer = controller.layers[1];
+			AnimatorControllerLayer upperBodyLayer = controller.layers[2];
+			if (baseLayer.name != "Base Layer" || spellLayer.name != "SpellLayer" || upperBodyLayer.name != "UpperBody")
 			{
 				throw new InvalidOperationException("Unexpected spell animation layer layout.");
 			}
@@ -207,8 +211,14 @@ namespace CR
 				throw new InvalidOperationException("UpperBody layer requires an AvatarMask.");
 			}
 
-			ValidateStates(baseLayer, "CastSpellDirected", "CastingSpellOmni", "ChannelCastDirected", "ChannelCastOmni", "CastSpellDirectedFinish", "CastSpellOmniFinish");
-			ValidateStates(upperBodyLayer, "Empty", "CastSpellDirectedFinish", "CastSpellOmniFinish");
+			ValidateStates(spellLayer, "CastSpellDirected", "CastingSpellOmni", "ChannelCastDirected", "ChannelCastOmni", "CastSpellDirectedFinish", "CastSpellOmniFinish");
+			ValidateStates(baseLayer, "Stand", "MoveForwardBT", "Movebackward");
+			ValidateStates(spellLayer, "Empty");
+			if (spellLayer.avatarMask != null || upperBodyLayer.syncedLayerIndex != 1 || upperBodyLayer.syncedLayerAffectsTiming)
+				throw new InvalidOperationException("UpperBody must follow the unmasked SpellLayer with Timing disabled.");
+			foreach (ChildAnimatorState child in spellLayer.stateMachine.states)
+				if (child.state.motion != null && upperBodyLayer.GetOverrideMotion(child.state) != child.state.motion)
+					throw new InvalidOperationException($"UpperBody requires an explicit clip binding for {child.state.name}, including when SpellLayer weight is zero.");
 		}
 
 		private static void ValidateStates(AnimatorControllerLayer layer, params string[] requiredStates)
@@ -228,53 +238,118 @@ namespace CR
 		{
 			character.PlaySpellAnimation(animationType, false, 0f);
 			animator.Update(0.01f);
-			ValidateCurrentState(animator, 0, expectedState);
+			ValidateCurrentState(animator, 1, expectedState);
+			ValidateCurrentState(animator, 0, "Stand");
 		}
 
 		private static void ValidateRelease(Character character, Animator animator,
 			SpellAnimationType animationType, string expectedState)
 		{
-			character.PlayStand();
-			animator.Update(0.3f);
-			character.PlaySpellAnimation(animationType, true, 0f);
-			character.PlayStand();
-			animator.Update(0.01f);
-			if (!Mathf.Approximately(animator.GetLayerWeight(1), 1f))
+			foreach (int frameRate in new[] { 30, 60 })
 			{
-				throw new InvalidOperationException("Playing an upper-body spell did not enable the UpperBody layer.");
-			}
+				character.StopSpellAnimation(0f);
+				character.PlayStand();
+				animator.Update(0.3f);
+				character.PlaySpellAnimation(animationType, true, 0f);
+				Tick(character, animator, 0.01f);
+				ValidateCurrentState(animator, 0, "Stand");
+				ValidateSpellSynchronization(animator, expectedState);
+				if (animator.GetLayerWeight(1) < 0.99f || animator.GetLayerWeight(2) < 0.99f)
+					throw new InvalidOperationException("Standing spell requires both spell layers.");
 
-			ValidateCurrentState(animator, 1, expectedState);
-			ValidateCurrentState(animator, 0, expectedState);
-			if (Mathf.Abs(animator.GetCurrentAnimatorStateInfo(0).normalizedTime -
-				animator.GetCurrentAnimatorStateInfo(1).normalizedTime) > 0.01f)
+				float previousPhase = animator.GetCurrentAnimatorStateInfo(1).normalizedTime;
+				float previousWeight = animator.GetLayerWeight(1);
+				float deltaTime = 1f / frameRate;
+				int segmentFrames = frameRate / 5;
+				for (int frame = 0; frame < segmentFrames * 3; frame++)
+				{
+					if (frame == 0) character.PlayMoveForward();
+					if (frame == segmentFrames) character.PlayStand();
+					if (frame == segmentFrames * 2) character.PlayMoveBackward();
+					Tick(character, animator, deltaTime);
+					ValidateSpellSynchronization(animator, expectedState);
+					float phase = animator.GetCurrentAnimatorStateInfo(1).normalizedTime;
+					float expectedAdvance = deltaTime / animator.GetCurrentAnimatorStateInfo(1).length;
+					if (Mathf.Abs(phase - previousPhase - expectedAdvance) > 0.002f)
+						throw new InvalidOperationException("Movement restarted, paused, or changed the spell clock.");
+					float weight = animator.GetLayerWeight(1);
+					if (Mathf.Abs(weight - previousWeight) > deltaTime / character.m_SpellMovementBlendDuration + 0.001f)
+						throw new InvalidOperationException("Spell movement weight snapped.");
+					if (frame == segmentFrames - 1 || frame == segmentFrames * 3 - 1)
+						if (weight > 0.01f) throw new InvalidOperationException("Movement did not fade the full-body layer out.");
+					if (frame == segmentFrames * 2 - 1)
+					{
+						if (weight < 0.99f) throw new InvalidOperationException("Stopping did not restore the full-body layer.");
+						ValidateStoppedLowerBodyPose(animator, expectedState, phase);
+					}
+					previousPhase = phase;
+					previousWeight = weight;
+				}
+				character.StopSpellAnimation(0.12f);
+				for (int frame = 0; frame < frameRate / 4; frame++) Tick(character, animator, deltaTime);
+				ValidateCurrentState(animator, 0, "Movebackward");
+				if (animator.GetLayerWeight(1) != 0f || animator.GetLayerWeight(2) != 0f)
+					throw new InvalidOperationException("Cancellation retained spell layers.");
+
+				character.PlaySpellAnimation(animationType, true, 0.12f);
+				for (int frame = 0; frame < frameRate / 3; frame++) Tick(character, animator, deltaTime);
+				ValidateSpellSynchronization(animator, expectedState);
+				character.PlayStand();
+				character.SetUpperBodySpellLayerEnabled(false);
+				for (int frame = 0; frame < frameRate / 5; frame++) Tick(character, animator, deltaTime);
+				if (animator.GetLayerWeight(1) < 0.99f || animator.GetLayerWeight(2) != 0f)
+					throw new InvalidOperationException("Spell-only comparison is not independent.");
+				float phaseBeforeToggle = animator.GetCurrentAnimatorStateInfo(1).normalizedTime;
+				character.SetUpperBodySpellLayerEnabled(true);
+				Tick(character, animator, deltaTime);
+				if (animator.GetCurrentAnimatorStateInfo(1).normalizedTime <= phaseBeforeToggle)
+					throw new InvalidOperationException("Overlay toggle restarted the spell.");
+				character.PlayMoveForward();
+				for (int frame = 0; frame < frameRate * 2; frame++) Tick(character, animator, deltaTime);
+				if (character.IsPlayingSpellAnimation || animator.GetLayerWeight(1) != 0f || animator.GetLayerWeight(2) != 0f)
+					throw new InvalidOperationException("Zero-weight source did not complete the spell automatically.");
+			}
+		}
+
+		private static void Tick(Character character, Animator animator, float deltaTime)
+		{
+			character.EvaluateSpellLayers(deltaTime);
+			animator.Update(deltaTime);
+		}
+
+		private static void ValidateSpellSynchronization(Animator animator, string state)
+		{
+			ValidateCurrentState(animator, 1, state);
+			ValidateCurrentState(animator, 2, state);
+			if (Mathf.Abs(animator.GetCurrentAnimatorStateInfo(1).normalizedTime -
+				animator.GetCurrentAnimatorStateInfo(2).normalizedTime) > 0.001f)
+				throw new InvalidOperationException("SpellLayer and UpperBody phases differ.");
+		}
+
+		private static void ValidateStoppedLowerBodyPose(Animator animator, string state, float phase)
+		{
+			GameObject referenceObject = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(m_CharacterPath));
+			referenceObject.hideFlags = HideFlags.HideAndDontSave;
+			try
 			{
-				throw new InvalidOperationException("Finish layers are not synchronized.");
+				Animator reference = referenceObject.GetComponentInChildren<Animator>();
+				reference.Rebind();
+				reference.SetLayerWeight(1, 1f);
+				reference.SetLayerWeight(2, 0f);
+				reference.Play(state, 1, phase);
+				reference.Update(0f);
+				foreach (HumanBodyBones bone in new[] { HumanBodyBones.Hips, HumanBodyBones.LeftUpperLeg,
+					HumanBodyBones.RightUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg,
+					HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot })
+				{
+					Transform actual = animator.GetBoneTransform(bone);
+					Transform expected = reference.GetBoneTransform(bone);
+					if (Quaternion.Angle(actual.localRotation, expected.localRotation) > 0.1f ||
+						Vector3.Distance(actual.localPosition, expected.localPosition) > 0.0001f)
+						throw new InvalidOperationException($"Stopping did not restore the current spell pose on {bone}.");
+				}
 			}
-
-			character.PlayMoveForward();
-			animator.Update(0.2f);
-			animator.Update(0.01f);
-			ValidateCurrentState(animator, 0, "MoveForwardBT");
-			ValidateCurrentState(animator, 1, expectedState);
-			character.StopSpellAnimation(0f);
-			animator.Update(0.01f);
-			ValidateCurrentState(animator, 0, "MoveForwardBT");
-
-			character.PlaySpellAnimation(animationType, true, 0f);
-			animator.Update(0.01f);
-			ValidateCurrentState(animator, 0, "MoveForwardBT");
-			ValidateCurrentState(animator, 1, expectedState);
-			character.PlayMoveBackward();
-			animator.Update(0.2f);
-			animator.Update(0.01f);
-			character.PlaySpellAnimation(animationType, true, 0f);
-			animator.Update(0.01f);
-			ValidateCurrentState(animator, 0, "Movebackward");
-			ValidateCurrentState(animator, 1, expectedState);
-			character.StopSpellAnimation(0f);
-			animator.Update(0.01f);
-			ValidateCurrentState(animator, 0, "Movebackward");
+			finally { UnityEngine.Object.DestroyImmediate(referenceObject); }
 		}
 
 		private static void ValidateCurrentState(Animator animator, int layer, string expectedState)
@@ -287,3 +362,4 @@ namespace CR
 		}
 	}
 }
+

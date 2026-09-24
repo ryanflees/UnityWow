@@ -22,8 +22,16 @@ namespace CR
 		};
 		private static readonly HumanBodyBones[] m_ActionBones =
 		{
-			HumanBodyBones.Head, HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm
+			HumanBodyBones.Head, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand,
+			HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand
 		};
+		private static readonly HumanBodyBones[] m_ArmPoseBones = new[]
+		{
+			HumanBodyBones.LeftShoulder, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand,
+			HumanBodyBones.RightShoulder, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand
+		}.Concat(Enumerable.Range((int)HumanBodyBones.LeftThumbProximal,
+			(int)HumanBodyBones.RightLittleDistal - (int)HumanBodyBones.LeftThumbProximal + 1)
+			.Select(value => (HumanBodyBones)value)).ToArray();
 
 		[MenuItem("CR/Workshop/Validate Character IK (Play Mode)")]
 		public static void Validate()
@@ -50,6 +58,7 @@ namespace CR
 				float maximumLowerBodyDisplacement = 0f;
 				float maximumTwist = 0f;
 				float maximumActionError = 0f;
+				float maximumHandOffsetError = 0f;
 				int limitedSamples = 0;
 				for (int spell = 0; spell < 2; spell++)
 				{
@@ -69,11 +78,13 @@ namespace CR
 							for (int frame = 15; frame <= 42; frame += 9)
 							{
 								float phase = frame / 60f / clip.length;
-								animator.Play(direction == Vector3.zero ? state : y < 0 ? "Movebackward" : "MoveForwardBT", 0, phase);
+								animator.Play(direction == Vector3.zero ? "Stand" : y < 0 ? "Movebackward" : "MoveForwardBT", 0, phase);
 								animator.Play(state, 1, phase);
-								animator.SetLayerWeight(1, direction == Vector3.zero ? 0f : 1f);
+								animator.SetLayerWeight(1, direction == Vector3.zero ? 1f : 0f);
+								animator.SetLayerWeight(2, 1f);
 								animator.Update(0f);
-								reference.Play(state, 0, phase);
+								reference.SetLayerWeight(1, 1f);
+								reference.Play(state, 1, phase);
 								reference.Update(0f);
 								Transform anchor = animator.GetBoneTransform(HumanBodyBones.UpperChest);
 								Quaternion[] actionRotations = m_ActionBones.Select(bone => reference.GetBoneTransform(bone).rotation).ToArray();
@@ -95,6 +106,16 @@ namespace CR
 									maximumActionError = Mathf.Max(maximumActionError, actionError);
 									if (actionError > 0.1f) throw new InvalidOperationException($"Torso limits changed {m_ActionBones[bone]} orientation by {actionError} degrees.");
 								}
+								foreach (bool left in new[] { true, false })
+								{
+									HumanBodyBones arm = left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm;
+									HumanBodyBones hand = left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
+									Vector3 actual = animator.GetBoneTransform(hand).position - animator.GetBoneTransform(arm).position;
+									Vector3 expected = reference.GetBoneTransform(hand).position - reference.GetBoneTransform(arm).position;
+									float handError = Vector3.Distance(actual, expected);
+									maximumHandOffsetError = Mathf.Max(maximumHandOffsetError, handError);
+									if (handError > 0.001f) throw new InvalidOperationException($"{hand} offset differs from the spell by {handError:F6} m.");
+								}
 								for (int bone = 0; bone < m_SpineBones.Length; bone++)
 									if (Vector3.Distance(localPositions[bone], animator.GetBoneTransform(m_SpineBones[bone]).localPosition) > 0.00001f)
 										throw new InvalidOperationException("Spine distribution changed a local bone offset.");
@@ -115,8 +136,9 @@ namespace CR
 				ik.enabled = true;
 				float maximumStep = ValidateSideTransitions(animator, ik);
 				string headReport = ValidateHeadCycles(animator, ik);
+				string armReport = ValidateUpperBodyLayerArms(animator, reference);
 				if (limitedSamples == 0) throw new InvalidOperationException("The extreme-twist regression cases did not exercise joint limits.");
-				string report = $"Passed {samples} pose samples across two spells and nine directions with active LookAt. Joint twist maximum: {maximumTwist:F3} degrees; limited samples: {limitedSamples}; maximum retained torso offset: {maximumError:F3} degrees; head/arm orientation error: {maximumActionError:F3} degrees; lower-body displacement: {maximumLowerBodyDisplacement:F6} m. Four continuous side-cast sequences passed; maximum joint step: {maximumStep:F3} degrees at 60 Hz. Toggle, blend-in, stop, and disable checks passed.\n{headReport}\n";
+				string report = $"Passed {samples} pose samples across two spells and nine directions with active LookAt. Joint twist maximum: {maximumTwist:F3} degrees; limited samples: {limitedSamples}; maximum retained torso offset: {maximumError:F3} degrees; head/complete-arm orientation error: {maximumActionError:F3} degrees; hand offset error: {maximumHandOffsetError:F6} m; lower-body displacement: {maximumLowerBodyDisplacement:F6} m. Four continuous side-cast sequences passed; maximum joint step: {maximumStep:F3} degrees at 60 Hz. Toggle, blend-in, stop, and disable checks passed.\n{headReport}\n{armReport}\n";
 				Directory.CreateDirectory("Temp");
 				File.WriteAllText("Temp/CharacterIkValidation.txt", report);
 				Debug.Log(report);
@@ -135,7 +157,46 @@ namespace CR
 			animator.Rebind();
 			animator.Update(0f);
 			animator.SetLayerWeight(1, 0f);
+			animator.SetLayerWeight(2, 0f);
 			return animator;
+		}
+
+		private static string ValidateUpperBodyLayerArms(Animator animator, Animator reference)
+		{
+			int samples = 0;
+			float maximumError = 0f;
+			foreach (string state in new[] { "CastSpellDirected", "CastingSpellOmni", "ChannelCastDirected",
+				"ChannelCastOmni", "CastSpellDirectedFinish", "CastSpellOmniFinish" })
+			foreach (string locomotion in new[] { "MoveForwardBT", "Movebackward" })
+			foreach (float phase in new[] { 0.25f, 0.5f, 0.7f })
+			foreach (float weight in new[] { 0f, 0.25f, 0.5f, 0.75f, 1f })
+			{
+				animator.Rebind();
+				reference.Rebind();
+				animator.Play(locomotion, 0, phase);
+				animator.Play(state, 1, phase);
+				animator.SetLayerWeight(1, weight);
+				animator.SetLayerWeight(2, 1f);
+				reference.Play(state, 1, phase);
+				reference.SetLayerWeight(1, 1f);
+				reference.SetLayerWeight(2, 0f);
+				animator.Update(0f);
+				reference.Update(0f);
+				// Inspect the Animator output before IK, so a correct upper arm cannot conceal a bent forearm.
+				foreach (HumanBodyBones bone in m_ArmPoseBones)
+				{
+					Transform actual = animator.GetBoneTransform(bone);
+					Transform expected = reference.GetBoneTransform(bone);
+					if (actual == null && expected == null) continue;
+					if (actual == null || expected == null) throw new InvalidOperationException($"Missing arm reference bone {bone}.");
+					float error = Quaternion.Angle(actual.localRotation, expected.localRotation);
+					maximumError = Mathf.Max(maximumError, error);
+					if (error > 0.1f)
+						throw new InvalidOperationException($"UpperBody pose lost {bone}: {state}, {locomotion}, phase {phase}, SpellLayer weight {weight}, error {error:F3} degrees.");
+				}
+				samples++;
+			}
+			return $"Passed {samples} pre-IK arm poses across all six spells, forward/backward locomotion, three phases and five SpellLayer weights. Shoulder, upper arm, forearm, wrist and finger maximum local rotation error: {maximumError:F3} degrees.";
 		}
 
 		private static float ValidateJointTwist(Animator animator, float limit)
@@ -173,7 +234,7 @@ namespace CR
 					animator.transform.rotation = Quaternion.Euler(0f, direction * 90f, 0f);
 					animator.Play("MoveForwardBT", 0, 0f);
 					animator.Play(state, 1, 0f);
-					animator.SetLayerWeight(1, 1f);
+					animator.SetLayerWeight(2, 1f);
 					animator.Update(0f);
 					ik.PlayUpperBodyPose(clip, Animator.StringToHash(state), 1, Quaternion.identity);
 					Quaternion[] previous = null;
@@ -250,6 +311,7 @@ namespace CR
 							animator.Play("MoveForwardBT", 0, 0f);
 							animator.Play("Empty", 1, 0f);
 							animator.SetLayerWeight(1, 0f);
+							animator.SetLayerWeight(2, 0f);
 							animator.Update(0.25f);
 							ik.m_Enable = ikMode == 1;
 							ik.SetLookAtDirection(Vector3.forward, Vector3.up);
@@ -263,7 +325,7 @@ namespace CR
 								int cycleFrame = frame % cycleFrames;
 								if (cycleFrame == 0)
 								{
-									animator.SetLayerWeight(1, 1f);
+									animator.SetLayerWeight(2, 1f);
 									animator.CrossFadeInFixedTime(state, 0.12f, 1, 0f);
 									ik.PlayUpperBodyPose(clip, Animator.StringToHash(state), 1, Quaternion.identity);
 								}
@@ -272,6 +334,7 @@ namespace CR
 									ik.StopUpperBodyPose();
 									animator.CrossFadeInFixedTime("Empty", 0.12f, 1, 0f);
 									animator.SetLayerWeight(1, 0f);
+									animator.SetLayerWeight(2, 0f);
 								}
 								animator.Update(deltaTime);
 								ik.Evaluate(deltaTime);
