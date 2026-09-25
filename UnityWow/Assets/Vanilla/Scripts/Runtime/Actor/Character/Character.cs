@@ -150,7 +150,6 @@ namespace CR
 		{
 			return m_CurrentState == CharacterAnimationState.MoveForward ||
 				m_CurrentState == CharacterAnimationState.MoveBackward ||
-				m_CurrentState == CharacterAnimationState.Turn ||
 				m_CurrentState == CharacterAnimationState.JumpStart ||
 				m_CurrentState == CharacterAnimationState.JumpLoop ||
 				m_CurrentState == CharacterAnimationState.JumpEnd ||
