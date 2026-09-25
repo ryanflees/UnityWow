@@ -106,6 +106,8 @@ namespace CR
                         player.m_Character.m_LookAtIk.m_BaseTransform = player.m_CharacterRoot;
                 }
 
+                Unit unit = player.GetComponent<Unit>() ?? player.gameObject.AddComponent<Unit>();
+                unit.ResetForSpawn();
                 configure?.Invoke(player);
                 player.transform.SetParent(null, true);
                 player.gameObject.SetActive(true);

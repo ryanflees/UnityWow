@@ -5,8 +5,11 @@ using UnityEngine;
 
 namespace CR
 {
+	[RequireComponent(typeof(Unit))]
 	public class PlayerController : MonoBehaviour
 	{
+		private Unit m_Unit;
+		public Unit Unit => m_Unit != null ? m_Unit : m_Unit = GetComponent<Unit>();
 		public GameObject m_CameraTarget;
 		public TPCameraController m_TPCameraController;
 		[UnityEngine.Serialization.FormerlySerializedAs("m_KinematicActor")]
@@ -211,6 +214,7 @@ namespace CR
 
 		private void EnsureRuntimeInitialized()
 		{
+			if (Unit == null) m_Unit = gameObject.AddComponent<Unit>();
 			bool createdBlackboard = false;
 			if (m_Blackboard == null)
 			{

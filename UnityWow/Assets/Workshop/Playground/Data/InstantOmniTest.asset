@@ -18,7 +18,7 @@ MonoBehaviour:
   m_DisplayName: Instant Omni
   m_Description: Instant Omni animation. Usable while moving. No target, damage or
     effects. Shares a 1.5-second global cooldown, reduced by haste.
-  m_Icon: {fileID: -8355598701574230079, guid: a95a919e4c6474f4eaf9a78dbb36b716, type: 3}
+  m_Icon: {fileID: 1411595934523066160, guid: 1033acb97453b764598f999c93774a60, type: 3}
   m_School: 64
   m_Cast:
     m_Type: 0
